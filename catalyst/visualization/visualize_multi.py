@@ -1,3 +1,4 @@
+import argparse
 from utils import *
 import numpy as np
 import matplotlib.pyplot as plt
@@ -57,5 +58,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     stats = load_stats(args.root)
-    plot_multilayer_l_shape(stats, save_file=args.save_file)
+    plot_multilayer_l_shape(stats['stats'], save_file=args.save_file)
 
