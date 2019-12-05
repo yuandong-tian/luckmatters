@@ -16,7 +16,7 @@ def get_stat(w):
         w = np.array(w)
     elif isinstance(w, torch.Tensor):
         w = w.cpu().numpy()
-    return f"len: {w.shape}, min/max: {np.min(w):#.3f}/{np.max(w):#.3f}, mean: {np.mean(w):#.3f}" 
+    return f"len: {w.shape}, min/max: {np.min(w):#.6f}/{np.max(w):#.6f}, mean: {np.mean(w):#.6f}" 
 
 
 class StatsBase(ABC):
@@ -198,15 +198,20 @@ class StatsCorr(StatsBase):
         self.cnt_thres = cnt_thres 
 
     def _reset(self):
-        num_layer = self.teacher.num_hidden_layers() 
-
-        self.inner_prod = [None] * num_layer
-        self.sum_t = [None] * num_layer
-        self.sum_s = [None] * num_layer
-        self.sum_sqr_t = [None] * num_layer
-        self.sum_sqr_s = [None] * num_layer
+        self.initialized = False
 
     def _add(self, o_t, o_s, y):
+        if not self.initialized:
+            num_layer = len(o_t["hs"])
+
+            self.inner_prod = [None] * num_layer
+            self.sum_t = [None] * num_layer
+            self.sum_s = [None] * num_layer
+            self.sum_sqr_t = [None] * num_layer
+            self.sum_sqr_s = [None] * num_layer
+
+            self.initialized = True
+
         # Compute correlation. 
         # activation: [bs, #nodes]
         for k, (h_tt, h_ss) in enumerate(zip(o_t["hs"], o_s["hs"])):
@@ -223,7 +228,9 @@ class StatsCorr(StatsBase):
         return o_t["hs"][0].size(0)
 
     def _export(self):
-        num_layer = self.teacher.num_hidden_layers() 
+        assert self.initialized
+
+        num_layer = len(self.inner_prod)
         n = self.count
 
         res = []
@@ -420,3 +427,5 @@ class StatsMemory(StatsBase):
 
     def _export(self):
         return dict(memory_usage=utils.get_mem_usage())
+
+

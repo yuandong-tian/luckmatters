@@ -7,7 +7,7 @@ def get_stat(w):
         w = np.array(w)
     elif isinstance(w, torch.Tensor):
         w = w.cpu().numpy()
-    return f"len: {w.shape}, min/max: {np.min(w):#.3f}/{np.max(w):#.3f}, mean: {np.mean(w):#.3f}" 
+    return f"len: {w.shape}, min/max: {np.min(w):#.6f}/{np.max(w):#.6f}, mean: {np.mean(w):#.6f}" 
 
 def get_corrs(corrs, active_nodes=None, first_n=5, cnt_thres=0.9, details=False):
     summary = ""
