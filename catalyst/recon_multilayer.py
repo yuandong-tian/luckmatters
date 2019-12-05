@@ -40,6 +40,11 @@ def get_active_nodes(teacher):
 
     return active_nodes
 
+def save_model(prefix, model, i):
+    filename = os.path.join(os.getcwd(), f"{prefix}-{i}.pt")
+    torch.save(model, filename)
+    log.info(f"[{i}] Saving {prefix} to {filename}")
+
 
 def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, optimizer, args):
     teacher.eval()
@@ -96,6 +101,8 @@ def eval_model(i, eval_loader, teacher, student, eval_stats_op):
     log.info(f"[{i}]: Eval Stats:")
     log.info(eval_stats_op.prompt())
 
+    save_model("student", student, i)
+
     return eval_stats
 
 
@@ -119,6 +126,8 @@ def optimize(train_loader, eval_loader, teacher, student, loss_func, train_stats
         student.normalize()
     
     init_student = deepcopy(student)
+
+    save_model("teacher", teacher, 0)
 
     eval_stats = eval_model(-1, eval_loader, teacher, student, eval_stats_op)
     eval_stats["iter"] = -1
