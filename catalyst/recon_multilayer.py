@@ -101,8 +101,6 @@ def eval_model(i, eval_loader, teacher, student, eval_stats_op):
     log.info(f"[{i}]: Eval Stats:")
     log.info(eval_stats_op.prompt())
 
-    save_model("student", student, i)
-
     return eval_stats
 
 
@@ -116,10 +114,6 @@ def optimize(train_loader, eval_loader, teacher, student, loss_func, train_stats
 
     # optimizer = optim.SGD(student.parameters(), lr = 1e-2, momentum=0.9)
     # optimizer = optim.Adam(student.parameters(), lr = 0.0001)
-
-    if args.save_teacher:
-        filename = os.path.join(os.getcwd(), f"teacher.pt")
-        torch.save(teacher, filename)
 
     stats = []
 
@@ -162,8 +156,7 @@ def optimize(train_loader, eval_loader, teacher, student, loss_func, train_stats
 
         # save student
         if args.save_student and (i == args.num_epoch-1 or i % args.num_epoch_save_student == 0):
-            filename = os.path.join(os.getcwd(), f"student-{i}.pt")
-            torch.save(student, filename)
+            save_model("student", student, i)
 
         log.info("")
         log.info("")
