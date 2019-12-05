@@ -117,6 +117,10 @@ def optimize(train_loader, eval_loader, teacher, student, loss_func, train_stats
     # optimizer = optim.SGD(student.parameters(), lr = 1e-2, momentum=0.9)
     # optimizer = optim.Adam(student.parameters(), lr = 0.0001)
 
+    if args.save_teacher:
+        filename = os.path.join(os.getcwd(), f"teacher.pt")
+        torch.save(teacher, filename)
+
     stats = []
 
     last_total_diff = None
