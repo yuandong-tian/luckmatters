@@ -169,17 +169,15 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
         if args.regen_dataset_each_epoch:
             train_loader.dataset.regenerate()
 
-        if args.num_epoch_save_summary > 0 and cp.epoch % args.num_epoch_save_summary == 0:
-            # Only store last num_epoch_save_summary epochs
-            interval_stats = cp.stats[0:-1:args.num_epoch_save_summary] + [ cp.stats[-1] ]
-            torch.save(interval_stats, f"summary.pth")
-
         cp.epoch += 1
         utils_chkpoint.save_checkpoint(cp)
 
-    # Save the summary at the end.
-    end_stats = [ cp.stats[0], cp.stats[-1] ]
-    torch.save(end_stats, f"summary.pth")
+    if args.num_epoch_save_summary > 0:
+        interval_stats = cp.stats[0:-1:args.num_epoch_save_summary] + [ cp.stats[-1] ]
+        torch.save(interval_stats, f"summary.pth")
+    else:
+        end_stats = [ cp.stats[0], cp.stats[-1] ]
+        torch.save(end_stats, f"summary.pth")
 
 
 def parse_lr(lr_str):

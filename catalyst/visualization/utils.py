@@ -5,6 +5,9 @@ import sys
 import glob
 import yaml
 from copy import deepcopy
+import logging
+log = logging.getLogger(__file__)
+from tqdm import tqdm
 
 def find_params(data, cond):
     for d in data:
@@ -40,24 +43,25 @@ def load_configs(folder):
 
 
 def load_stats(folder, stats_filename="stats.pickle"):
-    print(f"Load stats from {folder}")
+    log.info(f"Load stats from {folder}")
     filename = os.path.join(folder, stats_filename)
     if os.path.exists(filename):
         args = load_configs(folder)
-        print(f"Stats file: {stats_filename}")
+        log.info(f"Stats file: {stats_filename}")
         stats = torch.load(filename)
         return dict(args=args,stats=stats,path=folder)
     else:
-        print(f"The {filename} doesn't exist")
+        log.warn(f"The {filename} doesn't exist")
         return None
 
 
-def load_data(root, stats_filename="stats.pickle"):
+def load_data(root, stats_filename="stats.pickle", use_tqdm=False):
     data = []
     total = 0
     folders = sorted(glob.glob(os.path.join(root, "*")))
     last_prefix = None
 
+    if use_tqdm: folders = tqdm(folders)
     for folder in folders:
         path, folder_name = os.path.split(folder)
         items = folder_name.split("_")
@@ -71,7 +75,7 @@ def load_data(root, stats_filename="stats.pickle"):
 
         stats = load_stats(folder, stats_filename=stats_filename)
         if stats is not None:
-            print(f"{len(data)}: {folder}")
+            log.info(f"{len(data)}: {folder}")
             data.append(stats)
             last_prefix = prefix
 
@@ -80,7 +84,7 @@ def load_data(root, stats_filename="stats.pickle"):
 def convert_stats_to_summary(folder):
     d = load_stats(folder)
     if d is None:
-        print(f"Cannot find stats in {folder}, skip.")
+        log.warn(f"Cannot find stats in {folder}, skip.")
         return
 
     # Only save the last stat. 
