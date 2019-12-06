@@ -101,8 +101,6 @@ def eval_model(i, eval_loader, teacher, student, eval_stats_op):
     log.info(f"[{i}]: Eval Stats:")
     log.info(eval_stats_op.prompt())
 
-    save_model("student", student, i)
-
     return eval_stats
 
 
@@ -156,20 +154,24 @@ def optimize(train_loader, eval_loader, teacher, student, loss_func, train_stats
 
         stats.append(this_stats)
 
+        # save student
+        if args.save_student and (i == args.num_epoch-1 or i % args.num_epoch_save_student == 0):
+            save_model("student", student, i)
+
         log.info("")
         log.info("")
 
         if args.regen_dataset_each_epoch:
             train_loader.dataset.regenerate()
 
-        if args.num_epoch_save_summary > 0 and i % args.num_epoch_save_summary == 0:
-            # Only store starting and end stats.
-            end_stats = [ stats[0], stats[-1] ]
-            torch.save(end_stats, f"summary.pth")
-
-    # Save the summary at the end.
-    end_stats = [ stats[0], stats[-1] ]
-    torch.save(end_stats, f"summary.pth")
+    if args.num_epoch_save_summary > 0 and i % args.num_epoch_save_summary == 0:
+        # Only store starting and end stats.
+        interval_stats = stats[0:-1:args.num_epoch_save_summary] + [ stats[-1] ]
+        torch.save(interval_stats, f"summary.pth")
+    else:
+        # Save the summary at the end.
+        end_stats = [ stats[0], stats[-1] ]
+        torch.save(end_stats, f"summary.pth")
 
     return stats
 
@@ -220,11 +222,6 @@ def main(args):
         args.num_epoch = int(args.num_epoch)
         log.info(f"#Epoch is now set to {args.num_epoch}")
 
-    # ks = [5, 6, 7, 8]
-    # ks = [10, 15, 20, 25]
-    # ks = [50, 75, 100, 125]
-
-    # ks = [50, 75, 100, 125]
     log.info(args.pretty())
     log.info(f"ks: {ks}")
     log.info(f"lr: {lrs}")

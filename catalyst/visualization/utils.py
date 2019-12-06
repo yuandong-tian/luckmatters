@@ -27,17 +27,24 @@ def find_all_params(data, cond):
             all_d.append(d)
     return all_d
 
+def load_configs(folder):
+    print(f"Load hydra configs from folder")
+    config_filename = os.path.join(folder, "config.yaml")
+    if not os.path.exists(config_filename):
+       config_filename = (os.path.join(folder, ".hydra/config.yaml"))
+    else:
+        return None
+    print(f"Config file: {config_filename}")
+    args = yaml.load(open(config_filename, "r"))
+    return dict(args=args,path=folder)
+
+
 def load_stats(folder, stats_filename="stats.pickle"):
     print(f"Load stats from {folder}")
     filename = os.path.join(folder, stats_filename)
     if os.path.exists(filename):
-        config_filename = os.path.join(folder, "config.yaml")
-        if not os.path.exists(config_filename):
-           config_filename = (os.path.join(folder, ".hydra/config.yaml"))
-        else:
-            return None
-        print(f"Config file: {config_filename}, stats file: {stats_filename}")
-        args = yaml.load(open(config_filename, "r"))
+        args = load_configs(folder)
+        print(f"Stats file: {stats_filename}")
         stats = torch.load(filename)
         return dict(args=args,stats=stats,path=folder)
     else:
