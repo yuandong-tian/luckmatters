@@ -1,6 +1,14 @@
 import torch
 import sys
+import random
+import numpy as np
 import os
+
+def set_all_seeds(rand_seed):
+    random.seed(rand_seed)
+    np.random.seed(rand_seed)
+    torch.manual_seed(rand_seed)
+    torch.cuda.manual_seed(rand_seed)
 
 def to_cpu(x):
     if isinstance(x, dict):

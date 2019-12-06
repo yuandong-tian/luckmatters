@@ -62,18 +62,21 @@ def exist_checkpoint():
     global CHECKPOINT_filename
     return os.path.isfile(CHECKPOINT_filename)
 
-def load_checkpoint():
+def load_checkpoint(filename=None):
     global CHECKPOINT_filename
+    if filename is None:
+        filename = CHECKPOINT_filename
+
     # optionally resume from a checkpoint
     # if args.resume:
         #if os.path.isfile(args.resume):
     # To make the script simple to understand, we do resume whenever there is
     # a checkpoint file
-    if os.path.isfile(CHECKPOINT_filename):
-        print(f"=> loading checkpoint {CHECKPOINT_filename}")
-        checkpoint = torch.load(CHECKPOINT_filename)
-        print("=> loaded checkpoint {CHECKPOINT_filename}")
+    if os.path.isfile(filename):
+        print(f"=> loading checkpoint {filename}")
+        checkpoint = torch.load(filename)
+        print(f"=> loaded checkpoint {filename}")
         return checkpoint
     else:
-        raise RuntimeError("=> no checkpoint found at '{CHECKPOINT_filename}'")
+        raise RuntimeError(f"=> no checkpoint found at '{filename}'")
 

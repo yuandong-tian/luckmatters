@@ -55,3 +55,4 @@ githash: ""
 num_epoch_save_summary: 10
 save_student: true
 num_epoch_save_student: 10
+resume_from_checkpoint:

@@ -4,6 +4,8 @@ import torchvision.datasets as datasets
 from torchvision import transforms
 from torch.utils.data.dataset import Dataset
 
+import utils
+
 class RandomDataset(Dataset):
     def __init__(self, N, d, std, noise_type="gaussian"):
         super(RandomDataset, self).__init__()

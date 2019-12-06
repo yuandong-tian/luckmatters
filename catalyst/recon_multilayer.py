@@ -182,12 +182,6 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
     torch.save(end_stats, f"summary.pth")
 
 
-def set_all_seeds(rand_seed):
-    random.seed(rand_seed)
-    np.random.seed(rand_seed)
-    torch.manual_seed(rand_seed)
-    torch.cuda.manual_seed(rand_seed)
-
 def parse_lr(lr_str):
     if lr_str.startswith("{"):
         lrs = eval(lr_str)
@@ -344,7 +338,7 @@ def main(args):
     cmd_line = " ".join(sys.argv)
     log.info(f"{cmd_line}")
     log.info(f"Working dir: {os.getcwd()}")
-    set_all_seeds(args.seed)
+    utils.set_all_seeds(args.seed)
 
     ks = args.ks
     lrs = parse_lr(args.lr)
@@ -379,6 +373,8 @@ def main(args):
 
     if utils_chkpoint.exist_checkpoint():
         cp = utils_chkpoint.load_checkpoint()
+    elif args.resume_from_checkpoint is not None:
+        cp = utils_chkpoint.load_checkpoint(filename=args.resume_from_checkpoint)
 
     else:
         teacher, student, active_nodes = initialize_networks(d, ks, d_output, eval_loader, args)
