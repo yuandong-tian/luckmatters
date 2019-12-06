@@ -3,6 +3,7 @@ import signal
 import os
 import sys
 import torch
+import socket 
 
 
 '''
@@ -16,9 +17,6 @@ Usage:
     save_checkpoint(any_object)
 '''
 
-checkpoint_freq = 1000
-MAIN_PID = os.getpid()
-HALT_filename = 'HALT'
 CHECKPOINT_filename = 'checkpoint.pth.tar'
 CHECKPOINT_tempfile = 'checkpoint.temp'
 SIGNAL_RECEIVED = False
@@ -33,13 +31,13 @@ def signalHandler(a, b):
     print('Signal received', a, time.time(), flush=True)
     SIGNAL_RECEIVED = True
 
-    ''' If HALT file exists, which means the job is done, exit peacefully.
-    '''
-    if os.path.isfile(HALT_filename):
-        print('Job is done, exiting')
-        exit(0)
+    print("caught signal", a)
+    print(socket.gethostname(), "USR1 signal caught.")
+    # do other stuff to cleanup here
+    print('requeuing job ' + os.environ['SLURM_JOB_ID'])
+    os.system('scontrol requeue ' + os.environ['SLURM_JOB_ID'])
+    sys.exit(-1)
 
-    return
 
 def init_checkpoint():
     signal.signal(signal.SIGUSR1, signalHandler)
