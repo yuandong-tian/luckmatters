@@ -105,18 +105,12 @@ def eval_model(i, eval_loader, teacher, student, eval_stats_op):
     log.info(f"[{i}]: Eval Stats:")
     log.info(eval_stats_op.prompt())
 
-    save_model("student", student, i)
-
     return eval_stats
 
 
 def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
     # optimizer = optim.SGD(student.parameters(), lr = 1e-2, momentum=0.9)
     # optimizer = optim.Adam(student.parameters(), lr = 0.0001)
-
-    def save_end_state(cp):
-        end_stats = [ cp.stats[0], cp.stats[-1] ]
-        torch.save(end_stats, f"summary.pth")
 
     if cp.epoch == 0:
         cp.stats = []
@@ -165,6 +159,10 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
 
         cp.stats.append(this_stats)
 
+        # save student
+        if args.save_student and (cp.epoch == args.num_epoch - 1 or cp.epoch % args.num_epoch_save_student == 0):
+            save_model("student", cp.student, cp.epoch)
+
         log.info("")
         log.info("")
 
@@ -172,14 +170,16 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
             train_loader.dataset.regenerate()
 
         if args.num_epoch_save_summary > 0 and cp.epoch % args.num_epoch_save_summary == 0:
-            # Only store starting and end stats.
-            save_end_state(cp)
+            # Only store last num_epoch_save_summary epochs
+            interval_stats = cp.stats[0:-1:args.num_epoch_save_summary] + [ cp.stats[-1] ]
+            torch.save(interval_stats, f"summary.pth")
 
         cp.epoch += 1
         utils_chkpoint.save_checkpoint(cp)
 
     # Save the summary at the end.
-    save_end_state(cp)
+    end_stats = [ cp.stats[0], cp.stats[-1] ]
+    torch.save(end_stats, f"summary.pth")
 
 
 def set_all_seeds(rand_seed):
@@ -367,11 +367,6 @@ def main(args):
         args.num_epoch = int(args.num_epoch)
         log.info(f"#Epoch is now set to {args.num_epoch}")
 
-    # ks = [5, 6, 7, 8]
-    # ks = [10, 15, 20, 25]
-    # ks = [50, 75, 100, 125]
-
-    # ks = [50, 75, 100, 125]
     log.info(args.pretty())
     log.info(f"ks: {ks}")
     log.info(f"lr: {lrs}")
