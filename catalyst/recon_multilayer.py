@@ -335,6 +335,8 @@ def initialize_student(student, teacher, args):
 
 @hydra.main(config_path='conf/config_multilayer.yaml', strict=True)
 def main(args):
+    utils_chkpoint.init_checkpoint()
+
     cmd_line = " ".join(sys.argv)
     log.info(f"{cmd_line}")
     log.info(f"Working dir: {os.getcwd()}")
