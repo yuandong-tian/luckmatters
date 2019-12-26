@@ -181,6 +181,9 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
 
 
 def parse_lr(lr_str):
+    if isinstance(lr_str, float):
+        return { 0 : lr_str }
+
     if lr_str.startswith("{"):
         lrs = eval(lr_str)
     else:
@@ -253,7 +256,7 @@ def initialize_networks(d, ks, d_output, eval_loader, args):
         if not args.use_cnn:
             student = Model(d[0], active_ks, d_output, 
                             multi=args.node_multi, 
-                            has_bias=not args.no_bias, has_bn=args.bn, has_bn_affine=args.bn_affine, bn_before_relu=args.bn_before_relu).cuda()
+                            has_bias=not args.no_bias, has_bn=args.bn, has_bn_affine=args.bn_affine, bn_before_relu=args.bn_before_relu, dropout=args.dropout).cuda()
         else:
             student = ModelConv(d, active_ks, d_output, multi=args.node_multi, has_bn=args.bn, bn_before_relu=args.bn_before_relu).cuda()
 

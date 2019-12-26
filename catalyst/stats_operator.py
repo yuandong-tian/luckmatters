@@ -274,6 +274,8 @@ class StatsCorr(StatsBase):
             summary += f"L{k}: {get_stat(score)}"
             if self.cnt_thres is not None:
                 summary += f", MatchCnt[>={self.cnt_thres}]: {get_stat(cnts)}"
+                if len(cnts) < 20:
+                    summary += " " + str(cnts)
             summary += "\n"
 
         return summary

@@ -34,6 +34,7 @@ ks: [50,75,100,125]
 # ks: [50,50,75,75,75,75,100,125]
 bn_affine: false
 bn: false
+dropout: 0.0 
 no_sep: false
 teacher_bn_affine: false
 teacher_bn: false

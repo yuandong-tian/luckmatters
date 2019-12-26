@@ -74,7 +74,7 @@ def init_w2(w, multiplier=5):
 
 
 class Model(nn.Module):
-    def __init__(self, d, ks, d_output, multi=1, has_bn=True, has_bn_affine=True, has_bias=True, bn_before_relu=False, leaky_relu=None):
+    def __init__(self, d, ks, d_output, multi=1, has_bn=True, has_bn_affine=True, has_bias=True, bn_before_relu=False, leaky_relu=None, dropout=0.0):
         super(Model, self).__init__()
         self.d = d
         self.ks = ks
@@ -85,8 +85,13 @@ class Model(nn.Module):
         last_k = d
         self.sizes = [d]
 
+        if dropout > 0.0:
+            self.dropout = nn.Dropout(p=dropout)
+        else:
+            self.dropout = None
+
         for k in ks:
-            k *= multi
+            k = int(k * multi + 0.5)
             self.ws_linear.append(nn.Linear(last_k, k, bias=has_bias))
             if has_bn:
                 self.ws_bn.append(nn.BatchNorm1d(k, affine=has_bn_affine))
@@ -164,8 +169,13 @@ class Model(nn.Module):
                 if len(self.ws_bn) > 0:
                     bn = self.ws_bn[i]
                     h = bn(h)
+
+            if self.dropout is not None:
+                h = self.dropout(h)
+
             hs.append(h)
             #bns.append(h)
+
         y = self.final_w(hs[-1])
         return dict(hs=hs, post_lins=post_lins, pre_bns=pre_bns, y=y)
 
@@ -225,7 +235,7 @@ class ModelConv(nn.Module):
         last_k = init_k
 
         for k in ks:
-            k *= multi
+            k = int(k * multi + 0.5)
             self.ws_linear.append(nn.Conv2d(last_k, k, 3))
             if has_bn:
                 self.ws_bn.append(nn.BatchNorm2d(k))
