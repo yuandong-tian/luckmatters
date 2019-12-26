@@ -3,6 +3,7 @@ import sys
 import random
 import numpy as np
 import os
+import subprocess
 
 def set_all_seeds(rand_seed):
     random.seed(rand_seed)
@@ -71,6 +72,11 @@ def get_mem_usage():
     # result += "shared: %s\t" % (mem2str(mem.shared))
     # result += "slab: %s\t" % (mem2str(mem.slab))
     return result
+
+def get_github_string():
+    _, output = subprocess.getstatusoutput("git -C ./ log --pretty=format:'%H' -n 1")
+    ret, _ = subprocess.getstatusoutput("git -C ./ diff-index --quiet HEAD --")
+    return f"Githash: {output}, unstaged: {ret}"
 
 
 def accumulate(all_y, y):

@@ -239,6 +239,7 @@ def initialize_networks(d, ks, d_output, eval_loader, args):
         teacher.init_w(use_sep = not args.no_sep, weight_choices=list(args.weight_choices))
         if args.teacher_strength_decay > 0: 
             # Prioritize teacher node.
+            log.info(f"Prioritize teacher node with decay coefficient: {args.teacher_strength_decay}")
             teacher.prioritize(args.teacher_strength_decay)
         
         teacher.normalize()

@@ -13,6 +13,8 @@ log = logging.getLogger(__file__)
 
 from theory_utils import init_separate_w, set_all_seeds
 
+import utils
+
 from utils_corrs import *
 from vis_corrs import *
 
@@ -309,9 +311,7 @@ def main(cfg):
     log.info(f"{cmd_line}")
     log.info(f"Working dir: {os.getcwd()}")
 
-    _, output = subprocess.getstatusoutput("git -C ./ log --pretty=format:'%H' -n 1")
-    ret, _ = subprocess.getstatusoutput("git -C ./ diff-index --quiet HEAD --")
-    log.info(f"Githash: {output}, unstaged: {ret}")
+    log.info(utils.get_github_string())
     log.info("Configuration:\n{}".format(cfg.pretty()))
 
     # Simulate 2-layer dynamics. 
