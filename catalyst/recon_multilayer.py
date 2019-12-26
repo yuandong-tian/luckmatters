@@ -180,6 +180,19 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
         torch.save(end_stats, f"summary.pth")
 
 
+def parse_ks(ks_str):
+    if isinstance(ks_str, int):
+        return [ks_str]
+
+    if ks_str.startswith("["):
+        # [20, 30, 50, 60]
+        ks = eval(ks_str)
+    else:
+        raise RuntimeError("Invalid ks: " + str(ks))
+
+    return ks
+
+
 def parse_lr(lr_str):
     if isinstance(lr_str, float):
         return { 0 : lr_str }
@@ -201,7 +214,7 @@ def parse_lr(lr_str):
 def initialize_networks(d, ks, d_output, eval_loader, args):
     if not args.use_cnn:
         teacher = Model(d[0], ks, d_output, 
-                has_bias=not args.no_bias, has_bn=args.teacher_bn, has_bn_affine=args.teacher_bn_affine, bn_before_relu=args.bn_before_relu, leaky_relu=args.leaky_relu).cuda()
+                has_bias=not args.no_bias, has_bn=args.teacher_bn, bn_before_relu=args.bn_before_relu, leaky_relu=args.leaky_relu).cuda()
 
     else:
         teacher = ModelConv(d, ks, d_output, has_bn=args.teacher_bn, bn_before_relu=args.bn_before_relu, leaky_relu=args.leaky_relu).cuda()
@@ -256,7 +269,7 @@ def initialize_networks(d, ks, d_output, eval_loader, args):
         if not args.use_cnn:
             student = Model(d[0], active_ks, d_output, 
                             multi=args.node_multi, 
-                            has_bias=not args.no_bias, has_bn=args.bn, has_bn_affine=args.bn_affine, bn_before_relu=args.bn_before_relu, dropout=args.dropout).cuda()
+                            has_bias=not args.no_bias, has_bn=args.bn, bn_before_relu=args.bn_before_relu, dropout=args.dropout).cuda()
         else:
             student = ModelConv(d, active_ks, d_output, multi=args.node_multi, has_bn=args.bn, bn_before_relu=args.bn_before_relu).cuda()
 
@@ -344,7 +357,7 @@ def main(args):
     log.info(f"Working dir: {os.getcwd()}")
     utils.set_all_seeds(args.seed)
 
-    ks = args.ks
+    ks = parse_ks(args.ks)
     lrs = parse_lr(args.lr)
 
     if args.perturb is not None or args.same_dir or args.same_sign:

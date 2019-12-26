@@ -74,7 +74,7 @@ def init_w2(w, multiplier=5):
 
 
 class Model(nn.Module):
-    def __init__(self, d, ks, d_output, multi=1, has_bn=True, has_bn_affine=True, has_bias=True, bn_before_relu=False, leaky_relu=None, dropout=0.0):
+    def __init__(self, d, ks, d_output, multi=1, has_bn=True, has_bias=True, bn_before_relu=False, leaky_relu=None, dropout=0.0):
         super(Model, self).__init__()
         self.d = d
         self.ks = ks
@@ -94,7 +94,7 @@ class Model(nn.Module):
             k = int(k * multi + 0.5)
             self.ws_linear.append(nn.Linear(last_k, k, bias=has_bias))
             if has_bn:
-                self.ws_bn.append(nn.BatchNorm1d(k, affine=has_bn_affine))
+                self.ws_bn.append(nn.BatchNorm1d(k, affine=True))
             self.sizes.append(k)
             last_k = k
 
