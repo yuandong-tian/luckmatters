@@ -181,16 +181,16 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
 
 
 def parse_ks(ks_str):
-    if isinstance(ks_str, int):
+    if isinstance(ks_str, str):
+        if ks_str.startswith("["):
+            # [20, 30, 50, 60]
+            ks = eval(ks_str)
+        else:
+            raise RuntimeError("Invalid ks: " + str(ks))
+    elif isinstance(ks_str, int):
         return [ks_str]
-
-    if ks_str.startswith("["):
-        # [20, 30, 50, 60]
-        ks = eval(ks_str)
     else:
-        raise RuntimeError("Invalid ks: " + str(ks))
-
-    return ks
+        return ks_str
 
 
 def parse_lr(lr_str):
@@ -387,6 +387,14 @@ def main(args):
 
     log.info(f"d_output: {d_output}") 
     loss_func = initialize_loss_func(args)
+
+    if args.save_train_dataset:
+        log.info("Save training dataset")
+        torch.save(train_loader, "train_dataset.pth")
+
+    if args.save_eval_dataset:
+        log.info("Save eval dataset")
+        torch.save(eval_loader, "eval_dataset.pth")
 
     if utils_chkpoint.exist_checkpoint():
         cp = utils_chkpoint.load_checkpoint()
