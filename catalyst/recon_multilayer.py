@@ -183,7 +183,12 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
 def parse_ks(ks_str):
     if isinstance(ks_str, int):
         return [ks_str]
-
+    try:
+        return list(ks_str)
+    except:
+        pass
+    if not isinstance(ks_str, str):
+        raise RuntimeError('Invalid ks type: ' + str(type(ks)))
     if ks_str.startswith("["):
         # [20, 30, 50, 60]
         ks = eval(ks_str)
