@@ -78,7 +78,7 @@ def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, op
 
     train_stats = train_stats_op.export()
 
-    log.info(f"[{i}]: Train Stats:")
+    log.info(f"[{i}]: Train Stats {train_stats_op.label}:")
     log.info(train_stats_op.prompt())
 
     return train_stats
@@ -102,7 +102,7 @@ def eval_model(i, eval_loader, teacher, student, eval_stats_op):
 
     eval_stats = eval_stats_op.export()
 
-    log.info(f"[{i}]: Eval Stats:")
+    log.info(f"[{i}]: Eval Stats {eval_stats_op.label}:")
     log.info(eval_stats_op.prompt())
 
     return eval_stats
@@ -153,8 +153,10 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
             return cp.stats
 
         eval_stats = eval_model(cp.epoch, eval_loader, cp.teacher, cp.student, cp.eval_stats_op)
+        eval_train_stats = eval_model(cp.epoch, train_loader, cp.teacher, cp.student, cp.eval_train_stats_op)
 
         this_stats.update(eval_stats)
+        this_stats.update(eval_train_stats)
         log.info(f"[{cp.epoch}]: Bytesize of stats: {utils.count_size(this_stats) / 2 ** 20} MB")
 
         cp.stats.append(this_stats)
@@ -405,9 +407,11 @@ def main(args):
         teacher, student, active_nodes = initialize_networks(d, ks, d_output, eval_loader, args)
         log.info("=== Start ===")
         train_stats_op, eval_stats_op = initialize_stats_ops(teacher, student, active_nodes, args)
+        eval_train_stats_op = deepcopy(eval_stats_op)
+        eval_train_stats_op.label = "eval_train"
 
         cp = Namespace(trial_idx=0, all_stats=[], lr=None, epoch=0, \
-                student=student, teacher=teacher, train_stats_op=train_stats_op, eval_stats_op=eval_stats_op)
+                student=student, teacher=teacher, train_stats_op=train_stats_op, eval_stats_op=eval_stats_op, eval_train_stats_op=eval_train_stats_op)
 
     # teacher.w0.bias.data.uniform_(-1, 0)
     # teacher.init_orth()
