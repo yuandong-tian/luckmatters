@@ -79,7 +79,7 @@ def prune_weight_bias(w, prune_ratio):
 
 
 class Model(nn.Module):
-    def __init__(self, d, ks, d_output, multi=2, has_bn=True, has_bias=True, bn_before_relu=False, leaky_relu=None, dropout=0.0):
+    def __init__(self, d, ks, d_output, multi=1, has_bn=True, has_bias=True, bn_before_relu=False, leaky_relu=None, dropout=0.0):
         super(Model, self).__init__()
         self.d = d
         self.ks = ks
