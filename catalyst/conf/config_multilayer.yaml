@@ -56,5 +56,7 @@ save_student: true
 num_epoch_save_student: 10
 resume_from_checkpoint:
 
+eval_teacher_prune_ratio: 0.0
+
 save_train_dataset: false
 save_eval_dataset: false

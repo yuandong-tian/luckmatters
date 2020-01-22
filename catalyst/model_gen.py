@@ -73,8 +73,13 @@ def init_w2(w, multiplier=5):
         w.bias.data[i] -= pos_ratio
 
 
+def prune_weight_bias(w, prune_ratio):
+    w.weight.data += torch.zeros_like(w.weight.data).normal_(0, std=noise_level)
+    w.bias.data += torch.zeros_like(w.bias.data).normal_(0, std=noise_level)
+
+
 class Model(nn.Module):
-    def __init__(self, d, ks, d_output, multi=1, has_bn=True, has_bias=True, bn_before_relu=False, leaky_relu=None, dropout=0.0):
+    def __init__(self, d, ks, d_output, multi=2, has_bn=True, has_bias=True, bn_before_relu=False, leaky_relu=None, dropout=0.0):
         super(Model, self).__init__()
         self.d = d
         self.ks = ks
@@ -128,14 +133,39 @@ class Model(nn.Module):
     def prioritize(self, strength_decay):
         def _prioritize(w):
             # output x input.
-            for i in range(w.size(1)):
-                w[:, i] /= pow(1 + i, strength_decay) 
+            '''
+            for i in range(w.weight.size(0)):
+                c = pow(1 + i, strength_decay)
+                w.weight.data[i, :] /=  c
+                w.bias.data[i] /= c
+            '''
+            for i in range(w.weight.size(1)):
+                w.weight.data[:, i] /= pow(1 + i, strength_decay) 
             
         # Prioritize teacher node.
         for w in self.ws_linear[1:]:
-            _prioritize(w.weight.data)
+            _prioritize(w)
 
-        _prioritize(self.final_w.weight.data)
+        _prioritize(self.final_w)
+
+    def prioritize_step(self, prune_ratio):
+        def _prioritize(w):
+            # output x input.
+            '''
+            for i in range(w.weight.size(0)):
+                c = pow(1 + i, strength_decay)
+                w.weight.data[i, :] /=  c
+                w.bias.data[i] /= c
+            '''
+            n_keep = int(w.weight.size(1) * (1 - prune_ratio))
+            # Make them insignificant
+            w.weight.data[:, n_keep:] /= 10
+            
+        # Prioritize teacher node.
+        for w in self.ws_linear[1:]:
+            _prioritize(w)
+
+        _prioritize(self.final_w)
 
     def scale(self, r):
         def _scale(w):
@@ -146,6 +176,19 @@ class Model(nn.Module):
             _scale(w)
 
         _scale(self.final_w)
+
+    def prune_weight_bias(self, prune_ratio):
+        def _prune(w):
+            # output x input.
+            n_keep = int(w.weight.size(0) * (1 - prune_ratio))
+            w.weight.data[n_keep:, :] = 0
+            w.bias.data[n_keep:] = 0
+            
+        # Prioritize teacher node.
+        for w in self.ws_linear:
+            _prune(w)
+
+        # _prune(self.final_w)
 
     def forward(self, x):
         hs = []

@@ -152,7 +152,7 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
             cp.stats.append(this_stats)
             return cp.stats
 
-        eval_stats = eval_model(cp.epoch, eval_loader, cp.teacher, cp.student, cp.eval_stats_op)
+        eval_stats = eval_model(cp.epoch, eval_loader, cp.teacher_eval, cp.student, cp.eval_stats_op)
         eval_train_stats = eval_model(cp.epoch, train_loader, cp.teacher, cp.student, cp.eval_train_stats_op)
 
         this_stats.update(eval_stats)
@@ -255,11 +255,18 @@ def initialize_networks(d, ks, d_output, eval_loader, args):
     else:
         log.info("Init teacher..")
         teacher.init_w(use_sep = not args.no_sep, weight_choices=list(args.weight_choices))
+        '''
         if args.teacher_strength_decay > 0: 
             # Prioritize teacher node.
             log.info(f"Prioritize teacher node with decay coefficient: {args.teacher_strength_decay}")
             teacher.prioritize(args.teacher_strength_decay)
-        
+        '''
+
+        if args.eval_teacher_prune_ratio > 0:
+            # Prioritize teacher prune ratio
+            log.info(f"Prune teacher node with step coefficient: {args.eval_teacher_prune_ratio}")
+            teacher.prioritize_step(args.eval_teacher_prune_ratio)
+
         teacher.normalize()
         log.info("Teacher weights initiailzed randomly...")
         active_nodes = None
@@ -405,13 +412,21 @@ def main(args):
 
     else:
         teacher, student, active_nodes = initialize_networks(d, ks, d_output, eval_loader, args)
+        if args.eval_teacher_prune_ratio > 0:
+            log.info(f"Prune teacher weight during evaluation. Ratio: {args.eval_teacher_prune_ratio}")
+            noise_teacher = deepcopy(teacher)
+            noise_teacher.prune_weight_bias(args.eval_teacher_prune_ratio)
+        else:
+            noise_teacher = teacher
+            
         log.info("=== Start ===")
         train_stats_op, eval_stats_op = initialize_stats_ops(teacher, student, active_nodes, args)
         eval_train_stats_op = deepcopy(eval_stats_op)
         eval_train_stats_op.label = "eval_train"
 
         cp = Namespace(trial_idx=0, all_stats=[], lr=None, epoch=0, \
-                student=student, teacher=teacher, train_stats_op=train_stats_op, eval_stats_op=eval_stats_op, eval_train_stats_op=eval_train_stats_op)
+                student=student, teacher=teacher, teacher_eval=noise_teacher, \
+                train_stats_op=train_stats_op, eval_stats_op=eval_stats_op, eval_train_stats_op=eval_train_stats_op)
 
     # teacher.w0.bias.data.uniform_(-1, 0)
     # teacher.init_orth()
