@@ -285,6 +285,11 @@ def initialize_networks(d, ks, d_output, eval_loader, args):
 
         # student can start with smaller norm. 
         student.scale(args.student_scale_down)
+    else:
+        log.info("Loading student from: " + args.load_student)
+        checkpoint = torch.load(args.load_student)
+        student.load_state_dict(checkpoint['net'])
+
 
     # Specify some teacher structure.
     '''
@@ -409,7 +414,6 @@ def main(args):
         cp = utils_chkpoint.load_checkpoint()
     elif args.resume_from_checkpoint is not None:
         cp = utils_chkpoint.load_checkpoint(filename=args.resume_from_checkpoint)
-
     else:
         teacher, student, active_nodes = initialize_networks(d, ks, d_output, eval_loader, args)
         if args.eval_teacher_prune_ratio > 0:
