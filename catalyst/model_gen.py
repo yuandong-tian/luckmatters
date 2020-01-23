@@ -159,7 +159,7 @@ class Model(nn.Module):
             '''
             n_keep = int(w.weight.size(1) * (1 - prune_ratio))
             # Make them insignificant
-            w.weight.data[:, n_keep:] /= 10
+            w.weight.data[:, n_keep:] /= 3
             
         # Prioritize teacher node.
         for w in self.ws_linear[1:]:
