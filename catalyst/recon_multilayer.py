@@ -153,10 +153,14 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
             return cp.stats
 
         eval_stats = eval_model(cp.epoch, eval_loader, cp.teacher_eval, cp.student, cp.eval_stats_op)
-        eval_train_stats = eval_model(cp.epoch, train_loader, cp.teacher, cp.student, cp.eval_train_stats_op)
-
         this_stats.update(eval_stats)
+
+        if cp.eval_no_noise_stats_op is not None:
+            this_stats.update(eval_model(cp.epoch, eval_loader, cp.teacher, cp.student, cp.eval_no_noise_stats_op))
+
+        eval_train_stats = eval_model(cp.epoch, train_loader, cp.teacher, cp.student, cp.eval_train_stats_op)
         this_stats.update(eval_train_stats)
+
         log.info(f"[{cp.epoch}]: Bytesize of stats: {utils.count_size(this_stats) / 2 ** 20} MB")
 
         cp.stats.append(this_stats)
@@ -431,9 +435,17 @@ def main(args):
         eval_train_stats_op = deepcopy(eval_stats_op)
         eval_train_stats_op.label = "eval_train"
 
+        if noise_teacher != teacher:
+            eval_no_noise_stats_op = deepcopy(eval_stats_op)
+            eval_no_noise_stats_op.label = "eval_no_noise"
+        else:
+            eval_no_noise_stats_op = None
+
         cp = Namespace(trial_idx=0, all_stats=[], lr=None, epoch=0, \
                 student=student, teacher=teacher, teacher_eval=noise_teacher, \
-                train_stats_op=train_stats_op, eval_stats_op=eval_stats_op, eval_train_stats_op=eval_train_stats_op)
+                train_stats_op=train_stats_op, eval_stats_op=eval_stats_op, \
+                eval_train_stats_op=eval_train_stats_op, \
+                eval_no_noise_stats_op=eval_no_noise_stats_op)
 
     # teacher.w0.bias.data.uniform_(-1, 0)
     # teacher.init_orth()
