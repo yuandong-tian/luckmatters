@@ -188,7 +188,10 @@ def parse_ks(ks_str):
             # [20, 30, 50, 60]
             ks = eval(ks_str)
         else:
-            raise RuntimeError("Invalid ks: " + str(ks))
+            try:
+                return [ int(k) for k in ks_str.split("-") ]
+            except:
+                raise RuntimeError("Invalid ks: " + ks_str)
     elif isinstance(ks_str, int):
         return [ks_str]
     else:
