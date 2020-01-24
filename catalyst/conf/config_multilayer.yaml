@@ -51,7 +51,6 @@ teacher_bias_last_layer_tune: true
 teacher_strength_decay: 0
 student_scale_down: 0.1
 data_dir: /checkpoint/yuandong
-githash: ""
 num_epoch_save_summary: 10
 save_student: true
 num_epoch_save_student: 10
@@ -62,3 +61,7 @@ eval_teacher_prune_ratio: 0.0
 
 save_train_dataset: false
 save_eval_dataset: false
+
+# These two are for sweep recording purpose
+githash: ""
+sweep_filename: ""

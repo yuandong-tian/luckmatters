@@ -5,7 +5,7 @@ import torch.nn as nn
 import utils
 import utils_corrs 
 import pprint
-from collections import Counter
+from collections import Counter, defaultdict
 
 def accumulate(a, v):
     return a + v if a is not None else v
@@ -280,36 +280,45 @@ class StatsCorr(StatsBase):
 
         return summary
 
+def compute(w):
+    return dict(
+        w_rms = w.weight.grad.pow(2).mean().sqrt().item(),
+        b_rms = w.bias.grad.pow(2).mean().sqrt().item(),
+        w_max = w.weight.grad.abs().max().item(),
+        b_max = w.bias.grad.abs().max().item()
+    )
+
+
 class StatsGrad(StatsBase):
     def __init__(self, teacher, student, label=""):
         super().__init__(teacher, student, label)
 
     def _reset(self):
         num_layer = self.teacher.num_layers() 
+        self.stats = dict()
+        self.num_layer = num_layer
 
-        self.weight_grad_norms = torch.FloatTensor(num_layer).fill_(0)
-        self.bias_grad_norms = torch.FloatTensor(num_layer).fill_(0)
+    def add_dict(self, k, d2):
+        for key, v in d2.items():
+            if key not in self.stats:
+                self.stats[key] = torch.zeros(self.num_layer)
+
+            self.stats[key][k] += v
 
     def _add(self, o_t, o_s, y):
         # Only count gradient in student. 
         model = self.student
 
-        weight_grad_norms = []
-        bias_grad_norms = []
-
         k = 0
         for w in model.ws_linear:
-            self.weight_grad_norms[k] += w.weight.grad.norm().item()
-            self.bias_grad_norms[k] += w.bias.grad.norm().item()
+            self.add_dict(k, compute(w))
             k += 1
 
-        self.weight_grad_norms[k] += model.final_w.weight.grad.norm().item()
-        self.bias_grad_norms[k] += model.final_w.bias.grad.norm().item()
-
+        self.add_dict(k, compute(model.final_w))
         return 1
 
     def _export(self):
-        return dict(weight_grad_norms=self.weight_grad_norms / self.count, bias_grad_norms=self.bias_grad_norms / self.count)
+        return { "grad_" + k : v / self.count for k, v in self.stats.items() }
 
 
 class StatsL2Loss(StatsBase):
