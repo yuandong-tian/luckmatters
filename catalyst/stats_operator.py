@@ -284,8 +284,12 @@ def compute(w):
     return dict(
         w_rms = w.weight.grad.pow(2).mean().sqrt().item(),
         b_rms = w.bias.grad.pow(2).mean().sqrt().item(),
+
         w_max = w.weight.grad.abs().max().item(),
-        b_max = w.bias.grad.abs().max().item()
+        b_max = w.bias.grad.abs().max().item(),
+
+        w_norm = w.weight.grad.norm().item(),
+        b_norm = w.bias.grad.norm().item(),
     )
 
 
