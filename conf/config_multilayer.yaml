@@ -50,7 +50,7 @@ teacher_bias_tune: true
 teacher_bias_last_layer_tune: true
 teacher_strength_decay: 0
 student_scale_down: 0.1
-data_dir: /checkpoint/yuandong
+data_dir: ""
 num_epoch_save_summary: 10
 save_student: true
 num_epoch_save_student: 10
