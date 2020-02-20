@@ -1,5 +1,5 @@
 # Supplementary Materials
-This is supplementary materials for ICML submission "Student Specialization in Deep Rectified Networks With Finite Width and Input Dimension". 
+This is the codebase for ICML submission "Student Specialization in Deep Rectified Networks With Finite Width and Input Dimension". 
 
 # Required package
 Install [hydra](https://github.com/facebookresearch/hydra) by following its instructions.
