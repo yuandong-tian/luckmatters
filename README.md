@@ -37,7 +37,7 @@ python recon_two_layer.py multi=2 d=100 m=5 teacher_strength_decay=1 lr=0.01 use
 
 Fig. 6 is generated with the following command:
 
-``
+```
 python recon_multilayer.py -m seed=11,12,13,14,15,16,17,18,19,20 num_trial=1 node_multi=2,5 num_epoch=200 random_dataset_size=5000,10000,20000,50000,100000,200000,500000 stats_grad_norm=true optim_method=sgd lr=0-0.2-20-0.1 cross_entropy=true,false
 python recon_multilayer.py -m seed=11,12,13,14,15,16,17,18,19,20 num_trial=1 node_multi=2,5 num_epoch=200 random_dataset_size=750000,1000000,2000000 stats_grad_norm=true optim_method=sgd lr=0-0.2-20-0.1 cross_entropy=true
 
