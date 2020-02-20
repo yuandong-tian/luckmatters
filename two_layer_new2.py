@@ -13,8 +13,6 @@ log = logging.getLogger(__file__)
 
 from theory_utils import init_separate_w, set_all_seeds
 
-import utils
-
 from utils_corrs import *
 from vis_corrs import *
 
@@ -60,12 +58,14 @@ def init(cfg):
 
     log.info(f"d = {d}, m = {m}, n = {n}, c = {c}")
 
+    choices = [-1.0, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1.0]
+
     W1_t = torch.randn(d + 1, m).cuda() * cfg.teacher_scale
-    W1_t[:-1, :] = torch.from_numpy(init_separate_w(m, d, list(cfg.weight_choices))).t()
+    W1_t[:-1, :] = torch.from_numpy(init_separate_w(m, d, choices)).t()
     W1_t[-1, :] = cfg.bias
 
     W2_t = torch.randn(m + 1, c).cuda() * cfg.teacher_scale
-    W2_t[:-1, :] = torch.from_numpy(init_separate_w(c, m, list(cfg.weight_choices))).t()
+    W2_t[:-1, :] = torch.from_numpy(init_separate_w(c, m, choices)).t()
 
     if cfg.teacher_strength_decay > 0:
         for i in range(1, m):
@@ -311,7 +311,9 @@ def main(cfg):
     log.info(f"{cmd_line}")
     log.info(f"Working dir: {os.getcwd()}")
 
-    log.info(utils.get_github_string())
+    _, output = subprocess.getstatusoutput("git -C ./ log --pretty=format:'%H' -n 1")
+    ret, _ = subprocess.getstatusoutput("git -C ./ diff-index --quiet HEAD --")
+    log.info(f"Githash: {output}, unstaged: {ret}")
     log.info("Configuration:\n{}".format(cfg.pretty()))
 
     # Simulate 2-layer dynamics. 
