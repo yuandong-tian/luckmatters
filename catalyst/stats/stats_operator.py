@@ -2,10 +2,12 @@ from abc import ABC, abstractmethod
 import numpy as np
 import torch
 import torch.nn as nn
-import utils
-import utils_corrs 
 import pprint
 from collections import Counter, defaultdict
+
+import sys
+sys.path.append("..")
+import utils
 
 def accumulate(a, v):
     return a + v if a is not None else v
@@ -251,7 +253,7 @@ class StatsCorr(StatsBase):
 
         return dict(corrs=res)
 
-    def prompt(self):
+    def prompt(self, verbose=False):
         summary = ""
         for k, corr in enumerate(self.results["corrs"]):
             score = []
@@ -276,7 +278,11 @@ class StatsCorr(StatsBase):
                 summary += f", MatchCnt[>={self.cnt_thres}]: {get_stat(cnts)}"
                 if len(cnts) < 20:
                     summary += " " + str(cnts)
+
             summary += "\n"
+
+            if verbose:
+                summary += str(sorted(score)) + "\n"
 
         return summary
 

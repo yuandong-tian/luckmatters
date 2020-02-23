@@ -4,7 +4,7 @@ import os
 import torch
 import torch.nn as nn
 import random
-from theory_utils import haar_measure, init_separate_w
+from utils import haar_measure, init_separate_w
 
 
 # Generate random orth matrix.

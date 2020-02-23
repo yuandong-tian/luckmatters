@@ -12,18 +12,16 @@ import os
 import sys
 
 import teacher_tune
-import stats_operator 
-import utils
 
 from argparse import Namespace
-
-import utils_chkpoint
 
 import logging
 log = logging.getLogger(__file__)
 
-from utils_corrs import *
-from vis_corrs import get_corrs, get_stat
+from utils import *
+import stats
+import checkpoint
+
 from model_gen import Model, ModelConv, prune
 from copy import deepcopy
 import pickle
@@ -161,7 +159,7 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
         eval_train_stats = eval_model(cp.epoch, train_loader, cp.teacher, cp.student, cp.eval_train_stats_op)
         this_stats.update(eval_train_stats)
 
-        log.info(f"[{cp.epoch}]: Bytesize of stats: {utils.count_size(this_stats) / 2 ** 20} MB")
+        log.info(f"[{cp.epoch}]: Bytesize of stats: {count_size(this_stats) / 2 ** 20} MB")
 
         cp.stats.append(this_stats)
 
@@ -176,7 +174,7 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
             train_loader.dataset.regenerate()
 
         cp.epoch += 1
-        utils_chkpoint.save_checkpoint(cp)
+        checkpoint.save_checkpoint(cp)
 
     if args.num_epoch_save_summary > 0:
         interval_stats = cp.stats[0:-1:args.num_epoch_save_summary] + [ cp.stats[-1] ]
@@ -313,26 +311,26 @@ def initialize_networks(d, ks, d_output, eval_loader, args):
 
 
 def initialize_stats_ops(teacher, student, active_nodes, args):
-    stats_op = stats_operator.StatsCollector(teacher, student)
+    stats_op = stats.StatsCollector(teacher, student)
 
     # Compute Correlation between teacher and student activations. 
-    stats_op.add_stat(stats_operator.StatsCorr, active_nodes=active_nodes, cnt_thres=0.9)
+    stats_op.add_stat(stats.StatsCorr, active_nodes=active_nodes, cnt_thres=0.9)
 
     if args.cross_entropy:
-        stats_op.add_stat(stats_operator.StatsCELoss)
+        stats_op.add_stat(stats.StatsCELoss)
     else:
-        stats_op.add_stat(stats_operator.StatsL2Loss)
+        stats_op.add_stat(stats.StatsL2Loss)
 
     # Duplicate training and testing. 
     eval_stats_op = deepcopy(stats_op)
     stats_op.label = "train"
     eval_stats_op.label = "eval"
 
-    stats_op.add_stat(stats_operator.StatsGrad)
-    stats_op.add_stat(stats_operator.StatsMemory)
+    stats_op.add_stat(stats.StatsGrad)
+    stats_op.add_stat(stats.StatsMemory)
 
     if args.stats_H:
-        eval_stats_op.add_stat(stats_operator.StatsHs)
+        eval_stats_op.add_stat(stats.StatsHs)
 
     return stats_op, eval_stats_op
 
@@ -369,12 +367,12 @@ def initialize_student(student, teacher, args):
 
 @hydra.main(config_path='conf/config_multilayer.yaml', strict=True)
 def main(args):
-    utils_chkpoint.init_checkpoint()
+    checkpoint.init_checkpoint()
 
     cmd_line = " ".join(sys.argv)
     log.info(f"{cmd_line}")
     log.info(f"Working dir: {os.getcwd()}")
-    utils.set_all_seeds(args.seed)
+    set_all_seeds(args.seed)
 
     ks = parse_ks(args.ks)
     lrs = parse_lr(args.lr)
@@ -415,10 +413,10 @@ def main(args):
         log.info("Save eval dataset")
         torch.save(eval_loader, "eval_dataset.pth")
 
-    if utils_chkpoint.exist_checkpoint():
-        cp = utils_chkpoint.load_checkpoint()
+    if checkpoint.exist_checkpoint():
+        cp = checkpoint.load_checkpoint()
     elif args.resume_from_checkpoint is not None:
-        cp = utils_chkpoint.load_checkpoint(filename=args.resume_from_checkpoint)
+        cp = checkpoint.load_checkpoint(filename=args.resume_from_checkpoint)
     else:
         teacher, student, active_nodes = initialize_networks(d, ks, d_output, eval_loader, args)
         if args.eval_teacher_prune_ratio > 0:
