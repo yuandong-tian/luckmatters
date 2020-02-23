@@ -1,5 +1,5 @@
 import torch
-import utils
+import utils_ as utils
 
 def tune_teacher(eval_loader, teacher):
     # Tune the bias of the teacher so that their activation/inactivation is approximated 0.5/0.5
