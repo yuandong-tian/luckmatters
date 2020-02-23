@@ -86,7 +86,7 @@ class FastGradientSignUntargeted():
 
         with torch.enable_grad():
             for _iter in range(self.max_iters):
-                outputs, _ = student(x)
+                outputs = model(x)
 
                 loss = loss_func(outputs, labels)
 
@@ -98,7 +98,9 @@ class FastGradientSignUntargeted():
                 # the adversaries' pixel value should within max_x and min_x due 
                 # to the l_infinity / l2 restriction
                 x = project(x, original_images, self.epsilon, self._type)
+
                 # the adversaries' value should be valid pixel value
-                x.clamp_(self.min_val, self.max_val)
+                if self.min_val is not None or self.max_val is not None:
+                    x.clamp_(self.min_val, self.max_val)
 
         return x

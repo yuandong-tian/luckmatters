@@ -48,7 +48,7 @@ def save_model(prefix, model, i):
     log.info(f"[{i}] Saving {prefix} to {filename}")
 
 
-def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, preturber, optimizer, args):
+def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, perturber, optimizer, args):
     teacher.eval()
     student.train()
 
@@ -62,9 +62,10 @@ def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, pr
         output_t = teacher(x)
 
         # adversarial training, if there is anyone defined. 
-        if preturber is not None:
+        if perturber is not None:
             student.eval()
-            x = preturber.attack(student, x, output_t["y"].detach(), loss_func) 
+            forwarder = lambda x : student(x)["y"]
+            x = perturber.perturb(forwarder, x, output_t["y"].detach(), loss_func) 
             student.train()
             output_t = teacher(x)
 

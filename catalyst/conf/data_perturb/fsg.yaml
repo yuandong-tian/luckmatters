@@ -3,8 +3,8 @@ data_perturb:
   params:
     epsilon: 0.3 
     alpha:  0.01
-    min_val: 0
-    max_val: 1
+    min_val: null
+    max_val: null
     max_iters: 5 
     _type: linf
     
