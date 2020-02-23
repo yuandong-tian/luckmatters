@@ -48,7 +48,7 @@ def save_model(prefix, model, i):
     log.info(f"[{i}] Saving {prefix} to {filename}")
 
 
-def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, optimizer, args):
+def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, preturber, optimizer, args):
     teacher.eval()
     student.train()
 
@@ -60,6 +60,14 @@ def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, op
             x = x.view(x.size(0), -1)
         x = x.cuda()
         output_t = teacher(x)
+
+        # adversarial training, if there is anyone defined. 
+        if preturber is not None:
+            student.eval()
+            x = preturber.attack(student, x, output_t["y"].detach(), loss_func) 
+            student.train()
+            output_t = teacher(x)
+
         output_s = student(x)
 
         err = loss_func(output_s["y"], output_t["y"].detach())
@@ -133,6 +141,11 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
     else:
         raise RuntimeError(f"Unknown optim method: {args.optim_method}")
 
+    if args.data_perturb["class"] is not None:
+        perturber = hydra.utils.instantiate(args.data_perturb)
+    else:
+        perturber = None
+
 
     while cp.epoch < args.num_epoch:
         if cp.epoch in lrs:
@@ -141,7 +154,7 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
             for param_group in optimizer.param_groups:
                 param_group['lr'] = cp.lr
 
-        train_stats = train_model(cp.epoch, train_loader, cp.teacher, cp.student, cp.train_stats_op, loss_func, optimizer, args)
+        train_stats = train_model(cp.epoch, train_loader, cp.teacher, cp.student, cp.train_stats_op, loss_func, perturber, optimizer, args)
 
         this_stats = dict(iter=cp.epoch)
         this_stats.update(train_stats)

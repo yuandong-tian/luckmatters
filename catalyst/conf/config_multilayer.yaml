@@ -65,3 +65,7 @@ save_eval_dataset: false
 # These two are for sweep recording purpose
 githash: ""
 sweep_filename: ""
+
+defaults:
+  - data_perturb: no_perturb
+

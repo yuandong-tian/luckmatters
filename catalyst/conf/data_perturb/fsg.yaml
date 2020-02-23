@@ -1,0 +1,10 @@
+data_perturb:
+  class: attack.FastGradientSignUntargeted
+  params:
+    epsilon: 0.3 
+    alpha:  0.01
+    min_val: 0
+    max_val: 1
+    max_iters: 5 
+    _type: linf
+    
