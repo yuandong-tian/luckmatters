@@ -69,7 +69,8 @@ def init_dataset(args):
             d = (args.data_d,)
         d_output = 100
         train_dataset = RandomDataset(args.random_dataset_size, d, args.data_std, noise_type=args.dataset, projection_dim=args.projection_dim)
-        eval_dataset = RandomDataset(10240, d, args.data_std, noise_type=args.dataset, projection_dim=args.projection_dim)
+        # eval_dataset = RandomDataset(10240, d, args.data_std, noise_type=args.dataset, projection_dim=args.projection_dim)
+        eval_dataset = RandomDataset(10240, d, args.data_std, noise_type=args.dataset)
 
     elif args.dataset == "mnist":
         train_dataset = datasets.MNIST(
