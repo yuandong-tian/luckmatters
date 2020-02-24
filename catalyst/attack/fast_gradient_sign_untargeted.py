@@ -30,7 +30,7 @@ def project(x, original_x, epsilon, _type='linf'):
 
         dist_norm = torch.norm(dist, dim=1, keepdim=True)
 
-        mask = (dist_norm > epsilon).unsqueeze(2).unsqueeze(3)
+        mask = (dist_norm > epsilon)
 
         # dist = F.normalize(dist, p=2, dim=1)
 
@@ -66,7 +66,7 @@ class FastGradientSignUntargeted():
         # The perturbation of epsilon
         self._type = _type
         
-    def perturb(self, model, original_images, labels, loss_func, random_start=False):
+    def perturb(self, student, teacher, original_images, loss_func, random_start=False):
         # original_images: values are within self.min_val and self.max_val
 
         # The adversaries created from random close points to the original data
@@ -81,14 +81,13 @@ class FastGradientSignUntargeted():
 
         x.requires_grad = True 
 
-        # max_x = original_images + self.epsilon
-        # min_x = original_images - self.epsilon
-
         with torch.enable_grad():
             for _iter in range(self.max_iters):
-                outputs = model(x)
+                outputs_t = teacher(x)
+                outputs_s = student(x)
 
-                loss = loss_func(outputs, labels)
+                # Backpropagation on both side!
+                loss = loss_func(outputs_t, outputs_s)
 
                 grads = torch.autograd.grad(loss, x, grad_outputs=None, 
                         only_inputs=True)[0]
@@ -97,7 +96,7 @@ class FastGradientSignUntargeted():
 
                 # the adversaries' pixel value should within max_x and min_x due 
                 # to the l_infinity / l2 restriction
-                x = project(x, original_images, self.epsilon, self._type)
+                # x = project(x, original_images, self.epsilon, self._type)
 
                 # the adversaries' value should be valid pixel value
                 if self.min_val is not None or self.max_val is not None:
