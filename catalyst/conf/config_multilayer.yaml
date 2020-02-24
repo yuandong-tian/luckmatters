@@ -25,6 +25,7 @@ same_dir: false
 same_sign: false
 normalize: false
 dataset: "gaussian"  # [choice between "cifar", "mnist" or "gaussian"
+projection_dim: null
 no_bias: false
 load_student:
 load_teacher: 

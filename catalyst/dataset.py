@@ -3,16 +3,22 @@ import torchvision
 import torchvision.datasets as datasets
 from torchvision import transforms
 from torch.utils.data.dataset import Dataset
+from functools import reduce
+import operator
+
+import numpy as np
 
 import utils_ as utils
 
 class RandomDataset(Dataset):
-    def __init__(self, N, d, std, noise_type="gaussian"):
+    def __init__(self, N, d, std, noise_type="gaussian", projection_dim=None):
         super(RandomDataset, self).__init__()
         self.d = d
+        self.d_total = reduce(operator.mul, d, 1) 
         self.std = std
         self.N = N
         self.noise_type = noise_type
+        self.projection_dim = projection_dim
         self.regenerate()
 
     def regenerate(self):
@@ -23,6 +29,14 @@ class RandomDataset(Dataset):
             self.x.uniform_(-self.std / 2, self.std / 2)
         else:
             raise NotImplementedError(f"Unknown noise type: {self.noise_type}")
+
+        if self.projection_dim is not None and self.projection_dim < self.d_total:
+            # Project the dataset into a random low-dimensional space
+            # create an orthonomial projection
+            tmp = torch.FloatTensor(self.d_total, self.projection_dim).normal_(0, 1)
+            q, r = tmp.qr(some=False)
+            self.x = (self.x.view(self.N, -1) @ q) @ q.t()
+            self.x = self.x.view(self.N, *self.d)
 
     def __getitem__(self, idx):
         return self.x[idx], -1
@@ -54,8 +68,8 @@ def init_dataset(args):
         else:
             d = (args.data_d,)
         d_output = 100
-        train_dataset = RandomDataset(args.random_dataset_size, d, args.data_std, noise_type=args.dataset)
-        eval_dataset = RandomDataset(10240, d, args.data_std, noise_type=args.dataset)
+        train_dataset = RandomDataset(args.random_dataset_size, d, args.data_std, noise_type=args.dataset, projection_dim=args.projection_dim)
+        eval_dataset = RandomDataset(10240, d, args.data_std, noise_type=args.dataset, projection_dim=args.projection_dim)
 
     elif args.dataset == "mnist":
         train_dataset = datasets.MNIST(
