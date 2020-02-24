@@ -5,6 +5,8 @@ import torch.nn as nn
 import pprint
 from collections import Counter, defaultdict
 
+import json
+
 import sys
 sys.path.append("..")
 import utils_ as utils
@@ -19,6 +21,47 @@ def get_stat(w):
     elif isinstance(w, torch.Tensor):
         w = w.cpu().numpy()
     return f"len: {w.shape}, min/max: {np.min(w):#.6f}/{np.max(w):#.6f}, mean: {np.mean(w):#.6f}" 
+
+
+def corr_summary(corrs, verbose=False, active_nodes=None, cnt_thres=None, sizes=None):
+    # Corrs: [num_techer, num_student] at each layer.
+    summary = ""
+    data = []
+    for k, corr in enumerate(corrs):
+        score = []
+        cnts = []
+
+        sorted_corrs, indices = corr.sort(1, descending=True)
+        num_teacher = corr.size(0)
+
+        for kk in range(num_teacher):
+            if active_nodes is not None and kk not in active_nodes[k]:
+                continue
+
+            s = list(sorted_corrs[kk])
+            score.append(s[0].item())
+            if cnt_thres is not None:
+                cnt = sum([ ss.item() >= cnt_thres for ss in s ])
+                cnts.append(cnt)
+
+        summary += f"L{k}: "
+
+        if sizes is not None:
+            summary += str(sizes[k]) + ", "
+
+        summary += f"{get_stat(score)}"
+        if cnt_thres is not None:
+            summary += f", MatchCnt[>={cnt_thres}]: {get_stat(cnts)}"
+            if len(cnts) < 20:
+                summary += " " + str(cnts)
+
+        summary += "\n"
+
+        if verbose:
+            summary += str(sorted(score)) + "\n"
+        data.append(sorted(score))
+
+    return summary, data
 
 
 class StatsBase(ABC):
@@ -47,15 +90,13 @@ class StatsBase(ABC):
     def prompt(self):
         return pprint.pformat(self.results, indent=4)
 
-    @abstractmethod
     def _add(self, o_t, o_s, y):
-        pass
+        return 0
 
     @abstractmethod
     def _export(self):
         pass
 
-    @abstractmethod
     def _reset(self):
         pass
 
@@ -95,6 +136,9 @@ class StatsCollector:
         prompt = "\n"
         for stat in self.stats:
             this_prompt = stat.prompt()
+            if isinstance(this_prompt, tuple) or isinstance(this_prompt, list):
+                this_prompt = this_prompt[0]
+
             if this_prompt != "":
                 prompt += this_prompt + "\n"
 
@@ -201,6 +245,8 @@ class StatsCorr(StatsBase):
 
     def _reset(self):
         self.initialized = False
+        self.sizes_t = []
+        self.sizes_s = []
 
     def _add(self, o_t, o_s, y):
         if not self.initialized:
@@ -211,6 +257,10 @@ class StatsCorr(StatsBase):
             self.sum_s = [None] * num_layer
             self.sum_sqr_t = [None] * num_layer
             self.sum_sqr_s = [None] * num_layer
+            self.counts = [0] * num_layer
+
+            self.sizes_t = [ str(h.size()) for h in o_t["hs"] ]
+            self.sizes_s = [ str(h.size()) for h in o_s["hs"] ]
 
             self.initialized = True
 
@@ -219,6 +269,12 @@ class StatsCorr(StatsBase):
         for k, (h_tt, h_ss) in enumerate(zip(o_t["hs"], o_s["hs"])):
             h_t = h_tt.detach()
             h_s = h_ss.detach()
+
+            if h_t.dim() == 4:
+                h_t = h_t.permute(0, 2, 3, 1).reshape(-1, h_t.size(1))
+            if h_s.dim() == 4:
+                h_s = h_s.permute(0, 2, 3, 1).reshape(-1, h_s.size(1))
+
             self.inner_prod[k] = accumulate(self.inner_prod[k], h_t.t() @ h_s)
 
             self.sum_t[k] = accumulate(self.sum_t[k], h_t.sum(dim=0)) 
@@ -227,18 +283,20 @@ class StatsCorr(StatsBase):
             self.sum_sqr_t[k] = accumulate(self.sum_sqr_t[k], h_t.pow(2).sum(dim=0)) 
             self.sum_sqr_s[k] = accumulate(self.sum_sqr_s[k], h_s.pow(2).sum(dim=0)) 
 
+            self.counts[k] += h_t.size(0)
+
+        # Not useful
         return o_t["hs"][0].size(0)
 
     def _export(self):
         assert self.initialized
 
         num_layer = len(self.inner_prod)
-        n = self.count
 
         res = []
         eps = 1e-7
 
-        for ts, t_sum, s_sum, t_sqr, s_sqr in zip(self.inner_prod, self.sum_t, self.sum_s, self.sum_sqr_t, self.sum_sqr_s):
+        for n, ts, t_sum, s_sum, t_sqr, s_sqr in zip(self.counts, self.inner_prod, self.sum_t, self.sum_s, self.sum_sqr_t, self.sum_sqr_s):
             s_avg = s_sum / n
             t_avg = t_sum / n
 
@@ -254,37 +312,8 @@ class StatsCorr(StatsBase):
         return dict(corrs=res)
 
     def prompt(self, verbose=False):
-        summary = ""
-        for k, corr in enumerate(self.results["corrs"]):
-            score = []
-            cnts = []
-
-            # Corrs: [num_techer, num_student] at each layer.
-            sorted_corrs, indices = corr.sort(1, descending=True)
-            num_teacher = corr.size(0)
-
-            for kk in range(num_teacher):
-                if self.active_nodes is not None and kk not in self.active_nodes[k]:
-                    continue
-
-                s = list(sorted_corrs[kk])
-                score.append(s[0].item())
-                if self.cnt_thres is not None:
-                    cnt = sum([ ss.item() >= self.cnt_thres for ss in s ])
-                    cnts.append(cnt)
-
-            summary += f"L{k}: {get_stat(score)}"
-            if self.cnt_thres is not None:
-                summary += f", MatchCnt[>={self.cnt_thres}]: {get_stat(cnts)}"
-                if len(cnts) < 20:
-                    summary += " " + str(cnts)
-
-            summary += "\n"
-
-            if verbose:
-                summary += str(sorted(score)) + "\n"
-
-        return summary
+        return corr_summary(self.results["corrs"], 
+                active_nodes=self.active_nodes, cnt_thres=self.cnt_thres, sizes=self.sizes_t, verbose=False)
 
 def compute(w):
     return dict(
@@ -297,6 +326,23 @@ def compute(w):
         w_norm = w.weight.grad.norm().item(),
         b_norm = w.bias.grad.norm().item(),
     )
+
+def weight_corr(w_t, b_t, w_s, b_s):
+    # w_t: [num_output_t, num_input]
+    # w_s: [num_output_s, num_input]
+    # b_t: [num_output_t]
+    # b_s: [num_output_s]
+   
+    # [num_output_t, num_output_s]
+    inner_prod = w_t @ w_s.t() + b_t.unsqueeze(1) @ b_s.unsqueeze(1).t()
+
+    # [num_output_t]
+    norm_t = (w_t.pow(2).sum(dim=1) + b_t.pow(2)).sqrt()
+
+    # [num_output_s]
+    norm_s = (w_s.pow(2).sum(dim=1) + b_s.pow(2)).sqrt()
+
+    return inner_prod / norm_t[:, None] / norm_s[None, :]
 
 
 class StatsGrad(StatsBase):
@@ -329,6 +375,25 @@ class StatsGrad(StatsBase):
 
     def _export(self):
         return { "grad_" + k : v / self.count for k, v in self.stats.items() }
+
+
+class WeightCorr(StatsBase):
+    def __init__(self, teacher, student, label=""):
+        super().__init__(teacher, student, label)
+
+    def _export(self):
+        # Check weight correlations (for now just the last layer) 
+        w_t = self.teacher.ws_linear[0]
+        w_s = self.student.ws_linear[0]
+        res = weight_corr(
+            w_t.weight.data, w_t.bias.data, 
+            w_s.weight.data, w_s.bias.data
+        )
+
+        return dict(corrs=[res])
+
+    def prompt(self, verbose=False):
+        return corr_summary(self.results["corrs"], verbose=False)
 
 
 class StatsL2Loss(StatsBase):
