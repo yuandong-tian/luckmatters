@@ -59,16 +59,26 @@ def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, pe
         if not args.use_cnn:
             x = x.view(x.size(0), -1)
         x = x.cuda()
-        output_t = teacher(x)
 
-        # adversarial training, if there is anyone defined. 
+        # adversarial training, if there is anything defined. 
         if perturber is not None:
             student.eval()
-            forwarder = lambda x : student(x)["y"]
-            x = perturber.perturb(forwarder, x, output_t["y"].detach(), loss_func) 
+            forwarder_student = lambda x : student(x)["y"]
+            forwarder_teacher = lambda x : teacher(x)["y"]
+            x2 = perturber.perturb(forwarder_student, forwarder_teacher, x, loss_func) 
             student.train()
-            output_t = teacher(x)
 
+            output_t = teacher(x2)
+            output_s = student(x2)
+
+            err = loss_func(output_s["y"], output_t["y"].detach())
+            if torch.isnan(err).item():
+                log.info("NAN appears, optimization aborted")
+                return dict(exit="nan")
+            err.backward()
+            # train_stats_op.add(output_t, output_s, y)
+
+        output_t = teacher(x)
         output_s = student(x)
 
         err = loss_func(output_s["y"], output_t["y"].detach())
@@ -324,7 +334,7 @@ def initialize_networks(d, ks, d_output, eval_loader, args):
     return teacher, student, active_nodes
 
 
-def initialize_stats_ops(teacher, student, active_nodes, args):
+def initialize_stats_ops_common(teacher, student, active_nodes, args):
     stats_op = stats.StatsCollector(teacher, student)
 
     # Compute Correlation between teacher and student activations. 
@@ -335,18 +345,27 @@ def initialize_stats_ops(teacher, student, active_nodes, args):
     else:
         stats_op.add_stat(stats.StatsL2Loss)
 
-    # Duplicate training and testing. 
-    eval_stats_op = deepcopy(stats_op)
-    stats_op.label = "train"
-    eval_stats_op.label = "eval"
+    return stats_op
+
+
+def initialize_train_stats_ops(teacher, student, active_nodes, args):
+    stats_op = initialize_stats_ops_common(teacher, student, active_nodes, args)
 
     stats_op.add_stat(stats.StatsGrad)
     stats_op.add_stat(stats.StatsMemory)
 
-    if args.stats_H:
-        eval_stats_op.add_stat(stats.StatsHs)
+    return stats_op
 
-    return stats_op, eval_stats_op
+
+def initialize_eval_stats_ops(teacher, student, active_nodes, args):
+    stats_op = initialize_stats_ops_common(teacher, student, active_nodes, args)
+
+    if args.stats_H:
+        stats_op.add_stat(stats.StatsHs)
+
+    stats_op.add_stat(stats.WeightCorr)
+
+    return stats_op
 
 
 def initialize_loss_func(args):
@@ -441,12 +460,17 @@ def main(args):
             noise_teacher = teacher
             
         log.info("=== Start ===")
-        train_stats_op, eval_stats_op = initialize_stats_ops(teacher, student, active_nodes, args)
-        eval_train_stats_op = deepcopy(eval_stats_op)
+        train_stats_op = initialize_train_stats_ops(teacher, student, active_nodes, args)
+        train_stats_op.label = "train"
+
+        eval_stats_op = initialize_eval_stats_ops(teacher, student, active_nodes, args)
+        eval_stats_op.label = "train"
+
+        eval_train_stats_op = initialize_eval_stats_ops(teacher, student, active_nodes, args)
         eval_train_stats_op.label = "eval_train"
 
         if noise_teacher != teacher:
-            eval_no_noise_stats_op = deepcopy(eval_stats_op)
+            eval_no_noise_stats_op = initialize_eval_stats_ops(teacher, student, active_nodes, args)
             eval_no_noise_stats_op.label = "eval_no_noise"
         else:
             eval_no_noise_stats_op = None
