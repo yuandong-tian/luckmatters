@@ -39,6 +39,8 @@ class RandomDataset(Dataset):
             q = q[:, :self.projection_dim]
             self.x = (self.x.view(self.N, -1) @ q) @ q.t()
             self.x = self.x.view(self.N, *self.d)
+            # add noise as well. 
+            self.x += torch.zeros_like(self.x).normal_(0, self.std / 10)
 
     def __getitem__(self, idx):
         return self.x[idx], -1

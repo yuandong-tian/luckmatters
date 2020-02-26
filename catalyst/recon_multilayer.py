@@ -55,13 +55,13 @@ def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, pe
     train_stats_op.reset()
 
     for x, y in train_loader:
-        optimizer.zero_grad()
         if not args.use_cnn:
             x = x.view(x.size(0), -1)
         x = x.cuda()
 
         # adversarial training, if there is anything defined. 
         if perturber is not None:
+            optimizer.zero_grad()
             student.eval()
             forwarder_student = lambda x : student(x)["y"]
             forwarder_teacher = lambda x : teacher(x)["y"]
@@ -76,20 +76,22 @@ def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, pe
                 log.info("NAN appears, optimization aborted")
                 return dict(exit="nan")
             err.backward()
-            # train_stats_op.add(output_t, output_s, y)
+            train_stats_op.add(output_t, output_s, y)
+            optimizer.step()
 
-        output_t = teacher(x)
-        output_s = student(x)
+        if perturber is None or args.adv_and_original:
+            optimizer.zero_grad()
+            output_t = teacher(x)
+            output_s = student(x)
 
-        err = loss_func(output_s["y"], output_t["y"].detach())
-        if torch.isnan(err).item():
-            log.info("NAN appears, optimization aborted")
-            return dict(exit="nan")
-        err.backward()
+            err = loss_func(output_s["y"], output_t["y"].detach())
+            if torch.isnan(err).item():
+                log.info("NAN appears, optimization aborted")
+                return dict(exit="nan")
+            err.backward()
+            train_stats_op.add(output_t, output_s, y)
+            optimizer.step()
 
-        train_stats_op.add(output_t, output_s, y)
-
-        optimizer.step()
         if args.normalize:
             student.normalize()
 
@@ -464,7 +466,7 @@ def main(args):
         train_stats_op.label = "train"
 
         eval_stats_op = initialize_eval_stats_ops(teacher, student, active_nodes, args)
-        eval_stats_op.label = "train"
+        eval_stats_op.label = "eval"
 
         eval_train_stats_op = initialize_eval_stats_ops(teacher, student, active_nodes, args)
         eval_train_stats_op.label = "eval_train"
