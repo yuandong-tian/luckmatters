@@ -390,10 +390,10 @@ class WeightCorr(StatsBase):
             w_s.weight.data, w_s.bias.data
         )
 
-        return dict(corrs=[res])
+        return dict(weight_corrs=[res])
 
     def prompt(self, verbose=False):
-        return corr_summary(self.results["corrs"], verbose=False)
+        return corr_summary(self.results["weight_corrs"], verbose=False)
 
 
 class StatsL2Loss(StatsBase):
