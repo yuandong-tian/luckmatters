@@ -23,7 +23,7 @@ def get_stat(w):
     return f"len: {w.shape}, min/max: {np.min(w):#.6f}/{np.max(w):#.6f}, mean: {np.mean(w):#.6f}" 
 
 
-def corr_summary(corrs, verbose=False, active_nodes=None, cnt_thres=None, sizes=None):
+def corr_summary(corrs, verbose=False, active_nodes=None, cnt_thres=None, sizes=None, student_norms=None):
     # Corrs: [num_techer, num_student] at each layer.
     summary = ""
     data = []
@@ -32,7 +32,7 @@ def corr_summary(corrs, verbose=False, active_nodes=None, cnt_thres=None, sizes=
         cnts = []
 
         sorted_corrs, indices = corr.sort(1, descending=True)
-        num_teacher = corr.size(0)
+        num_teacher, num_student = corr.size()
 
         for kk in range(num_teacher):
             if active_nodes is not None and kk not in active_nodes[k]:
@@ -60,6 +60,27 @@ def corr_summary(corrs, verbose=False, active_nodes=None, cnt_thres=None, sizes=
         if verbose:
             summary += str(sorted(score)) + "\n"
         data.append(sorted(score))
+
+        # Student side, which students are not aligned with any teacher?
+        best_score = corr.max(dim=0)[0]
+        summary += f"  #unaligned of {num_student}" 
+        
+        if student_norms is not None:
+            avg_norm = student_norms[k].mean().item()
+            summary += f"[norm: {avg_norm:.3f}]"
+        summary += ": "    
+
+        for thres in [0.1, 0.3, 0.5, 0.6, 0.8, 0.9, 0.95]:
+            unaligned = (best_score < thres)
+            num_unspecialized = unaligned.sum().item()
+            if student_norms is not None:
+                avg_norm = student_norms[k][unaligned].mean().item()
+            else:
+                avg_norm = -1.0
+
+            summary += f" <{thres}: {num_unspecialized}[norm: {avg_norm:.3f}], "
+
+        summary += "\n"
 
     return summary, data
 
@@ -259,8 +280,8 @@ class StatsCorr(StatsBase):
             self.sum_sqr_s = [None] * num_layer
             self.counts = [0] * num_layer
 
-            self.sizes_t = [ str(h.size()) for h in o_t["hs"] ]
-            self.sizes_s = [ str(h.size()) for h in o_s["hs"] ]
+            self.sizes_t = [ str(list(h.size())[1:]) for h in o_t["hs"] ]
+            self.sizes_s = [ str(list(h.size())[1:]) for h in o_s["hs"] ]
 
             self.initialized = True
 
@@ -294,6 +315,8 @@ class StatsCorr(StatsBase):
         num_layer = len(self.inner_prod)
 
         res = []
+        s_norms = []
+        t_norms = []
         eps = 1e-7
 
         for n, ts, t_sum, s_sum, t_sqr, s_sqr in zip(self.counts, self.inner_prod, self.sum_t, self.sum_s, self.sum_sqr_t, self.sum_sqr_s):
@@ -308,12 +331,14 @@ class StatsCorr(StatsBase):
             corr = ts_centered / t_norm[:,None] / s_norm[None, :]
             
             res.append(corr)
+            s_norms.append(s_norm)
+            t_norms.append(t_norm)
 
-        return dict(corrs=res)
+        return dict(corrs=res, s_norms=s_norms, t_norms=t_norms)
 
     def prompt(self, verbose=False):
         return corr_summary(self.results["corrs"], 
-                active_nodes=self.active_nodes, cnt_thres=self.cnt_thres, sizes=self.sizes_t, verbose=False)
+                active_nodes=self.active_nodes, cnt_thres=self.cnt_thres, sizes=self.sizes_t, student_norms=self.results["s_norms"], verbose=False)
 
 def compute(w):
     return dict(

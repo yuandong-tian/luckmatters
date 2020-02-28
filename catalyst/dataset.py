@@ -11,7 +11,7 @@ import numpy as np
 import utils_ as utils
 
 class RandomDataset(Dataset):
-    def __init__(self, N, d, std, noise_type="gaussian", projection_dim=None):
+    def __init__(self, N, d, std, noise_type="gaussian", projection_dim=None, projection_more_noise_ratio=0.1):
         super(RandomDataset, self).__init__()
         self.d = d
         self.d_total = reduce(operator.mul, d, 1) 
@@ -19,6 +19,7 @@ class RandomDataset(Dataset):
         self.N = N
         self.noise_type = noise_type
         self.projection_dim = projection_dim
+        self.projection_more_noise_ratio = projection_more_noise_ratio
         self.regenerate()
 
     def regenerate(self):
@@ -40,7 +41,7 @@ class RandomDataset(Dataset):
             self.x = (self.x.view(self.N, -1) @ q) @ q.t()
             self.x = self.x.view(self.N, *self.d)
             # add noise as well. 
-            self.x += torch.zeros_like(self.x).normal_(0, self.std / 10)
+            self.x += torch.zeros_like(self.x).normal_(0, self.std * self.projection_more_noise_ratio)
 
     def __getitem__(self, idx):
         return self.x[idx], -1
@@ -72,7 +73,12 @@ def init_dataset(args):
         else:
             d = (args.data_d,)
         d_output = 100
-        train_dataset = RandomDataset(args.random_dataset_size, d, args.data_std, noise_type=args.dataset, projection_dim=args.projection_dim)
+        train_dataset = RandomDataset(
+                args.random_dataset_size, d, args.data_std, 
+                noise_type=args.dataset, 
+                projection_dim=args.projection_dim, 
+                projection_more_noise_ratio=args.projection_more_noise_ratio)
+
         # eval_dataset = RandomDataset(10240, d, args.data_std, noise_type=args.dataset, projection_dim=args.projection_dim)
         eval_dataset = RandomDataset(10240, d, args.data_std, noise_type=args.dataset)
 

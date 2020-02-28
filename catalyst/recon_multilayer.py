@@ -497,7 +497,7 @@ def main(args):
     # pickle.dump(model2numpy(teacher), open("weights_gt.pickle", "wb"), protocol=2)
 
     while cp.trial_idx < args.num_trial:
-        log.info("=== Trial %d, std = %f ===" % (cp.trial_idx, args.data_std))
+        log.info(f"=== Trial {cp.trial_idx}, std = {args.data_std}, dataset = {args.dataset} ===")
 
         # init_corrs[-1] = predict_last_order(student, teacher, args)
         # alter_last_layer = predict_last_order(student, teacher, args)
