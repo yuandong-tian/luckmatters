@@ -127,6 +127,35 @@ def eval_model(i, eval_loader, teacher, student, eval_stats_op):
     return eval_stats
 
 
+def suppress_unaligned(eval_loader, teacher, student, eval_stats_op):
+    # evaluation
+    teacher.eval()
+    student.eval()
+
+    eval_stats_op.reset()
+
+    with torch.no_grad():
+        for x, y in eval_loader:
+            if not teacher.use_cnn:
+                x = x.view(x.size(0), -1)
+            x = x.cuda()
+            output_t = teacher(x)
+            output_s = student(x)
+
+            eval_stats_op.add(output_t, output_s, y)
+
+    eval_stats = eval_stats_op.export()
+    stat = eval_stats_op.find_stat_obj("StatsCorr")
+
+    layer_idx = 0
+
+    best_students = set(stat.prompt()["best_students"][layer_idx])
+    nonbest = [ i for i in range(student.ws_linear[layer_idx].weight.size(0)) if i not in best_students ]
+    # Suppress others that are not best. 
+    student.ws_linear[0].weight.data[nonbest,:] /= 10
+    student.ws_linear[0].bias.data[nonbest] /= 10
+
+
 def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
     # optimizer = optim.SGD(student.parameters(), lr = 1e-2, momentum=0.9)
     # optimizer = optim.Adam(student.parameters(), lr = 0.0001)
@@ -142,7 +171,6 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
         
         save_model("teacher", cp.teacher, 0)
 
-        cp.student = initialize_student(cp.student, cp.teacher, args)
         eval_stats = eval_model(-1, eval_loader, cp.teacher, cp.student, cp.eval_stats_op)
         eval_stats["iter"] = -1
         cp.stats.append(eval_stats)
@@ -192,6 +220,10 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
         # save student
         if args.save_student and (cp.epoch == args.num_epoch - 1 or cp.epoch % args.num_epoch_save_student == 0):
             save_model("student", cp.student, cp.epoch)
+
+        if args.cheat_suppress_unaligned:
+            log.info("Suppress unaligned student node.")
+            suppress_unaligned(eval_loader, cp.teacher, cp.student, cp.eval_stats_op)
 
         log.info("")
         log.info("")
@@ -311,14 +343,12 @@ def initialize_networks(d, ks, d_output, eval_loader, args):
         else:
             student = ModelConv(d, active_ks, d_output, multi=args.node_multi, has_bn=args.bn, bn_before_relu=args.bn_before_relu).cuda()
 
-
         # student can start with smaller norm. 
         student.scale(args.student_scale_down)
+        initialize_student(student, teacher, args)
     else:
-        log.info("Loading student from: " + args.load_student)
-        checkpoint = torch.load(args.load_student)
-        student.load_state_dict(checkpoint['net'])
-
+        log.info(f"Loading student {args.load_student}")
+        student = torch.load(args.load_student)
 
     # Specify some teacher structure.
     '''
@@ -332,6 +362,8 @@ def initialize_networks(d, ks, d_output, eval_loader, args):
         teacher_tune.tune_teacher(eval_loader, teacher)
     if args.teacher_bias_last_layer_tune:
         teacher_tune.tune_teacher_last_layer(eval_loader, teacher)
+
+    teacher_tune.check(eval_loader, teacher, output_func=log.info)
 
     return teacher, student, active_nodes
 
@@ -383,21 +415,15 @@ def initialize_loss_func(args):
 
 
 def initialize_student(student, teacher, args):
-    if args.load_student is None:
-        student.reset_parameters()
-        # student = copy.deepcopy(student_clone)
-        # student.set_teacher_sign(teacher, scale=1)
-        if args.perturb is not None:
-            student.set_teacher(teacher, args.perturb)
-        if args.same_dir:
-            student.set_teacher_dir(teacher)
-        if args.same_sign:
-            student.set_teacher_sign(teacher)
-    else:
-        log.info(f"Loading student {args.load_student}")
-        student = torch.load(args.load_student)
-
-    return student
+    student.reset_parameters()
+    # student = copy.deepcopy(student_clone)
+    # student.set_teacher_sign(teacher, scale=1)
+    if args.perturb is not None:
+        student.set_teacher(teacher, args.perturb)
+    if args.same_dir:
+        student.set_teacher_dir(teacher)
+    if args.same_sign:
+        student.set_teacher_sign(teacher)
 
 
 @hydra.main(config_path='conf/config_multilayer.yaml', strict=True)
@@ -419,6 +445,13 @@ def main(args):
         args.num_trial = 1
 
     d, d_output, train_dataset, eval_dataset = init_dataset(args)
+
+    if args.save_dataset:
+        log.info("Saving training dataset")
+        torch.save(train_dataset, "train_dataset.pth")
+        log.info("Saving eval dataset")
+        torch.save(eval_dataset, "eval_dataset.pth")
+
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batchsize, shuffle=True, num_workers=4)
     eval_loader = torch.utils.data.DataLoader(eval_dataset, batch_size=args.eval_batchsize, shuffle=True, num_workers=4)
 

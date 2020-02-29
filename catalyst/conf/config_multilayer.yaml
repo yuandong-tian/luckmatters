@@ -13,6 +13,7 @@ batchsize: 64
 eval_batchsize: 64
 random_dataset_size: 2000000
 use_data_aug: true
+save_dataset: false
 
 # If total_bp_iters > 0, then num_epoch = total_bp_iters / random_dataset_size 
 total_bp_iters: 0
@@ -64,6 +65,8 @@ adv_and_original: false
 resume_from_checkpoint:
 
 eval_teacher_prune_ratio: 0.0
+
+cheat_suppress_unaligned: false
 
 save_train_dataset: false
 save_eval_dataset: false

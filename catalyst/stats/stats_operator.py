@@ -20,13 +20,14 @@ def get_stat(w):
         w = np.array(w)
     elif isinstance(w, torch.Tensor):
         w = w.cpu().numpy()
-    return f"len: {w.shape}, min/max: {np.min(w):#.6f}/{np.max(w):#.6f}, mean: {np.mean(w):#.6f}" 
+    return f"len: {w.shape}, min/max: {np.min(w):#.6f}/{np.max(w):#.6f}, mean/median: {np.mean(w):#.6f}/{np.median(w):#.6f}" 
 
 
 def corr_summary(corrs, verbose=False, active_nodes=None, cnt_thres=None, sizes=None, student_norms=None):
     # Corrs: [num_techer, num_student] at each layer.
     summary = ""
     data = []
+    best_students = []
     for k, corr in enumerate(corrs):
         score = []
         cnts = []
@@ -34,6 +35,9 @@ def corr_summary(corrs, verbose=False, active_nodes=None, cnt_thres=None, sizes=
         sorted_corrs, indices = corr.sort(1, descending=True)
         num_teacher, num_student = corr.size()
 
+        best_students.append(indices[:,0])
+
+        # Teachere side. 
         for kk in range(num_teacher):
             if active_nodes is not None and kk not in active_nodes[k]:
                 continue
@@ -82,7 +86,7 @@ def corr_summary(corrs, verbose=False, active_nodes=None, cnt_thres=None, sizes=
 
         summary += "\n"
 
-    return summary, data
+    return dict(summary=summary, data=data, best_students=best_students)
 
 
 class StatsBase(ABC):
@@ -131,6 +135,11 @@ class StatsCollector:
 
     def add_stat_obj(self, stat : StatsBase):
         self.stats.append(stat)
+
+    def find_stat_obj(self, name):
+        for stat in self.stats:
+            if str(type(stat)).find(name) >= 0:
+                return stat
     
     def add_stat(self, cls_stat, *args, sub_label="", **kwargs):
         ''' Add stat by specifying its class name directly '''
@@ -159,6 +168,8 @@ class StatsCollector:
             this_prompt = stat.prompt()
             if isinstance(this_prompt, tuple) or isinstance(this_prompt, list):
                 this_prompt = this_prompt[0]
+            elif isinstance(this_prompt, dict):
+                this_prompt = this_prompt["summary"]
 
             if this_prompt != "":
                 prompt += this_prompt + "\n"
@@ -341,16 +352,29 @@ class StatsCorr(StatsBase):
                 active_nodes=self.active_nodes, cnt_thres=self.cnt_thres, sizes=self.sizes_t, student_norms=self.results["s_norms"], verbose=False)
 
 def compute(w):
-    return dict(
-        w_rms = w.weight.grad.pow(2).mean().sqrt().item(),
-        b_rms = w.bias.grad.pow(2).mean().sqrt().item(),
+    assert w.weight.grad is not None
+    assert w.bias.grad is not None
 
-        w_max = w.weight.grad.abs().max().item(),
-        b_max = w.bias.grad.abs().max().item(),
+    res = dict()
 
-        w_norm = w.weight.grad.norm().item(),
-        b_norm = w.bias.grad.norm().item(),
+    grad = w.weight.grad
+    res.update(
+       dict(
+        w_rms = grad.pow(2).mean().sqrt().item(),
+        w_max = grad.abs().max().item(),
+        w_norm = grad.norm().item(),
+       )
     )
+
+    grad = w.bias.grad
+    res.update(
+            dict(
+                b_rms = grad.pow(2).mean().sqrt().item(),
+                b_max = grad.abs().max().item(),
+                b_norm = grad.norm().item(),
+             )
+    )
+    return res
 
 def weight_corr(w_t, b_t, w_s, b_s):
     # w_t: [num_output_t, num_input]

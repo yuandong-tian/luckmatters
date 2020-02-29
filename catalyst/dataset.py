@@ -37,8 +37,8 @@ class RandomDataset(Dataset):
             tmp = torch.FloatTensor(self.d_total, self.projection_dim).normal_(0, 1)
             q, r = tmp.qr(some=False)
             # Take first projection_dim subspace.
-            q = q[:, :self.projection_dim]
-            self.x = (self.x.view(self.N, -1) @ q) @ q.t()
+            self.q = q[:, :self.projection_dim]
+            self.x = (self.x.view(self.N, -1) @ self.q) @ self.q.t()
             self.x = self.x.view(self.N, *self.d)
             # add noise as well. 
             self.x += torch.zeros_like(self.x).normal_(0, self.std * self.projection_more_noise_ratio)
