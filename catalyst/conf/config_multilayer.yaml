@@ -12,6 +12,8 @@ num_trial: 10
 batchsize: 64
 eval_batchsize: 64
 random_dataset_size: 2000000
+use_data_aug: true
+
 # If total_bp_iters > 0, then num_epoch = total_bp_iters / random_dataset_size 
 total_bp_iters: 0
 momentum: 0.0
