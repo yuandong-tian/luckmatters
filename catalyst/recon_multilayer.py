@@ -287,33 +287,36 @@ def initialize_networks(d, ks, d_output, eval_loader, args):
     if args.load_teacher is not None:
         log.info("Loading teacher from: " + args.load_teacher)
         checkpoint = torch.load(args.load_teacher)
-        teacher.load_state_dict(checkpoint['net'])
+        active_nodes = None
+        active_ks = ks
 
-        if "inactive_nodes" in checkpoint: 
-            inactive_nodes = checkpoint["inactive_nodes"]
-            masks = checkpoint["masks"]
-            ratios = checkpoint["ratios"]
-            inactive_nodes2, masks2 = prune(teacher, ratios)
+        if isinstance(checkpoint, dict):
+            teacher.load_state_dict(checkpoint['net'])
 
-            for m, m2 in zip(masks, masks2):
-                if (m - m2).norm() > 1e-3:
-                    print(m)
-                    print(m2)
-                    raise RuntimeError("New mask is not the same as old mask")
+            if "inactive_nodes" in checkpoint: 
+                inactive_nodes = checkpoint["inactive_nodes"]
+                masks = checkpoint["masks"]
+                ratios = checkpoint["ratios"]
+                inactive_nodes2, masks2 = prune(teacher, ratios)
 
-            for inactive, inactive2 in zip(inactive_nodes, inactive_nodes2):
-                if set(inactive) != set(inactive2):
-                    raise RuntimeError("New inactive set is not the same as old inactive set")
+                for m, m2 in zip(masks, masks2):
+                    if (m - m2).norm() > 1e-3:
+                        print(m)
+                        print(m2)
+                        raise RuntimeError("New mask is not the same as old mask")
 
-            # Make sure the last layer is normalized. 
-            # teacher.normalize_last()
-            # teacher.final_w.weight.data /= 3
-            # teacher.final_w.bias.data /= 3
-            active_nodes = [ [ kk for kk in range(k) if kk not in a ] for a, k in zip(inactive_nodes, ks) ]
-            active_ks = [ len(a) for a in active_nodes ]
+                for inactive, inactive2 in zip(inactive_nodes, inactive_nodes2):
+                    if set(inactive) != set(inactive2):
+                        raise RuntimeError("New inactive set is not the same as old inactive set")
+
+                # Make sure the last layer is normalized. 
+                # teacher.normalize_last()
+                # teacher.final_w.weight.data /= 3
+                # teacher.final_w.bias.data /= 3
+                active_nodes = [ [ kk for kk in range(k) if kk not in a ] for a, k in zip(inactive_nodes, ks) ]
+                active_ks = [ len(a) for a in active_nodes ]
         else:
-            active_nodes = None
-            active_ks = ks
+            teacher = checkpoint
         
     else:
         log.info("Init teacher..")
@@ -444,13 +447,22 @@ def main(args):
     if args.load_student is not None:
         args.num_trial = 1
 
-    d, d_output, train_dataset, eval_dataset = init_dataset(args)
+    if args.load_dataset_path is not None:
+        train_dataset = torch.load(os.path.join(args.load_dataset_path, "train_dataset.pth"))
+        eval_dataset = torch.load(os.path.join(args.load_dataset_path, "eval_dataset.pth"))
+        saved = torch.load(os.path.join(args.load_dataset_path, "params_dataset.pth"))
+        d = saved["d"]
+        d_output = saved["d_output"]
+    else:
+        d, d_output, train_dataset, eval_dataset = init_dataset(args)
 
     if args.save_dataset:
         log.info("Saving training dataset")
         torch.save(train_dataset, "train_dataset.pth")
         log.info("Saving eval dataset")
         torch.save(eval_dataset, "eval_dataset.pth")
+        log.info("Saving dataset params")
+        torch.save(dict(d=d, d_output=d_output), "params_dataset.pth")
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batchsize, shuffle=True, num_workers=4)
     eval_loader = torch.utils.data.DataLoader(eval_dataset, batch_size=args.eval_batchsize, shuffle=True, num_workers=4)
