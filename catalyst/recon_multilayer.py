@@ -21,6 +21,7 @@ log = logging.getLogger(__file__)
 import basic_tools.checkpoint as checkpoint
 import basic_tools.stats_op as stats
 import basic_tools.utils as utils
+import basic_tools.logger as logger
 
 from model_gen import Model, ModelConv, prune
 from copy import deepcopy
@@ -45,7 +46,7 @@ def get_active_nodes(teacher):
 def save_model(prefix, model, i):
     filename = os.path.join(os.getcwd(), f"{prefix}-{i}.pt")
     torch.save(model, filename)
-    log.info(f"[{i}] Saving {prefix} to {filename}")
+    print(f"[{i}] Saving {prefix} to {filename}")
 
 
 def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, perturber, optimizer, args):
@@ -73,7 +74,7 @@ def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, pe
 
             err = loss_func(output_s["y"], output_t["y"].detach())
             if torch.isnan(err).item():
-                log.info("NAN appears, optimization aborted")
+                print("NAN appears, optimization aborted")
                 return dict(exit="nan")
             err.backward()
             train_stats_op.add(output_t, output_s, y)
@@ -86,7 +87,7 @@ def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, pe
 
             err = loss_func(output_s["y"], output_t["y"].detach())
             if torch.isnan(err).item():
-                log.info("NAN appears, optimization aborted")
+                print("NAN appears, optimization aborted")
                 return dict(exit="nan")
             err.backward()
             train_stats_op.add(output_t, output_s, y)
@@ -97,8 +98,8 @@ def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, pe
 
     train_stats = train_stats_op.export()
 
-    log.info(f"[{i}]: Train Stats {train_stats_op.label}:")
-    log.info(train_stats_op.prompt())
+    print(f"[{i}]: Train Stats {train_stats_op.label}:")
+    print(train_stats_op.prompt())
 
     return train_stats
 
@@ -121,8 +122,8 @@ def eval_model(i, eval_loader, teacher, student, eval_stats_op):
 
     eval_stats = eval_stats_op.export()
 
-    log.info(f"[{i}]: Eval Stats {eval_stats_op.label}:")
-    log.info(eval_stats_op.prompt())
+    print(f"[{i}]: Eval Stats {eval_stats_op.label}:")
+    print(eval_stats_op.prompt())
 
     return eval_stats
 
@@ -149,8 +150,11 @@ def suppress_unaligned(eval_loader, teacher, student, eval_stats_op):
 
     layer_idx = 0
 
-    best_students = set(stat.prompt()["best_students"][layer_idx])
+    summary = stat.prompt()
+
+    best_students = set(summary["best_students"][layer_idx])
     nonbest = [ i for i in range(student.ws_linear[layer_idx].weight.size(0)) if i not in best_students ]
+
     # Suppress others that are not best. 
     student.ws_linear[0].weight.data[nonbest,:] /= 10
     student.ws_linear[0].bias.data[nonbest] /= 10
@@ -164,7 +168,7 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
         cp.stats = []
         cp.lr = lrs[0]
 
-        log.info("Before optimization: ")
+        print("Before optimization: ")
 
         if args.normalize:
             cp.student.normalize()
@@ -191,7 +195,7 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
     while cp.epoch < args.num_epoch:
         if cp.epoch in lrs:
             cp.lr = lrs[cp.epoch]
-            log.info(f"[{cp.epoch}]: lr = {cp.lr}")
+            print(f"[{cp.epoch}]: lr = {cp.lr}")
             for param_group in optimizer.param_groups:
                 param_group['lr'] = cp.lr
 
@@ -213,7 +217,7 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
         eval_train_stats = eval_model(cp.epoch, train_loader, cp.teacher, cp.student, cp.eval_train_stats_op)
         this_stats.update(eval_train_stats)
 
-        log.info(f"[{cp.epoch}]: Bytesize of stats: {utils.count_size(this_stats) / 2 ** 20} MB")
+        print(f"[{cp.epoch}]: Bytesize of stats: {utils.count_size(this_stats) / 2 ** 20} MB")
 
         cp.stats.append(this_stats)
 
@@ -222,11 +226,11 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
             save_model("student", cp.student, cp.epoch)
 
         if args.cheat_suppress_unaligned:
-            log.info("Suppress unaligned student node.")
+            print("Suppress unaligned student node.")
             suppress_unaligned(eval_loader, cp.teacher, cp.student, cp.eval_stats_op)
 
-        log.info("")
-        log.info("")
+        print("")
+        print("")
 
         if args.regen_dataset_each_epoch:
             train_loader.dataset.regenerate()
@@ -276,7 +280,7 @@ def parse_lr(lr_str):
 
     return lrs
 
-def initialize_networks(d, ks, d_output, eval_loader, args):
+def initialize_networks(d, ks, d_output, args):
     if not args.use_cnn:
         teacher = Model(d[0], ks, d_output, 
                 has_bias=not args.no_bias, has_bn=args.teacher_bn, bn_before_relu=args.bn_before_relu, leaky_relu=args.leaky_relu).cuda()
@@ -285,7 +289,7 @@ def initialize_networks(d, ks, d_output, eval_loader, args):
         teacher = ModelConv(d, ks, d_output, has_bn=args.teacher_bn, bn_before_relu=args.bn_before_relu, leaky_relu=args.leaky_relu).cuda()
 
     if args.load_teacher is not None:
-        log.info("Loading teacher from: " + args.load_teacher)
+        print("Loading teacher from: " + args.load_teacher)
         checkpoint = torch.load(args.load_teacher)
         active_nodes = None
         active_ks = ks
@@ -319,24 +323,24 @@ def initialize_networks(d, ks, d_output, eval_loader, args):
             teacher = checkpoint
         
     else:
-        log.info("Init teacher..")
+        print("Init teacher..")
         teacher.init_w(use_sep = not args.no_sep, weight_choices=list(args.weight_choices))
         if args.teacher_strength_decay > 0: 
             # Prioritize teacher node.
-            log.info(f"Prioritize teacher node with decay coefficient: {args.teacher_strength_decay}")
+            print(f"Prioritize teacher node with decay coefficient: {args.teacher_strength_decay}")
             teacher.prioritize(args.teacher_strength_decay)
 
         if args.eval_teacher_prune_ratio > 0:
             # Prioritize teacher prune ratio
-            log.info(f"Prune teacher node with step coefficient: {args.eval_teacher_prune_ratio}")
+            print(f"Prune teacher node with step coefficient: {args.eval_teacher_prune_ratio}")
             teacher.prioritize_step(args.eval_teacher_prune_ratio)
 
         teacher.normalize()
-        log.info("Teacher weights initiailzed randomly...")
+        print("Teacher weights initiailzed randomly...")
         active_nodes = None
         active_ks = ks
 
-    log.info(f"Active ks: {active_ks}")
+    print(f"Active ks: {active_ks}")
 
     if args.load_student is None:
         if not args.use_cnn:
@@ -350,7 +354,7 @@ def initialize_networks(d, ks, d_output, eval_loader, args):
         student.scale(args.student_scale_down)
         initialize_student(student, teacher, args)
     else:
-        log.info(f"Loading student {args.load_student}")
+        print(f"Loading student {args.load_student}")
         student = torch.load(args.load_student)
 
     # Specify some teacher structure.
@@ -361,14 +365,26 @@ def initialize_networks(d, ks, d_output, eval_loader, args):
         teacher.w0.weight.data[i, span*i:span*i+span] = 1
     '''
 
-    if args.teacher_bias_tune:
-        teacher_tune.tune_teacher(eval_loader, teacher)
-    if args.teacher_bias_last_layer_tune:
-        teacher_tune.tune_teacher_last_layer(eval_loader, teacher)
-
-    teacher_tune.check(eval_loader, teacher, output_func=log.info)
-
     return teacher, student, active_nodes
+
+
+def tune_teacher_model(teacher, train_loader, eval_loader, args):
+    tune_switcher = dict(
+        eval=eval_loader, 
+        train=train_loader
+    )
+
+    assert args.tune_data in tune_switcher
+    tune_data_loader = tune_switcher[args.tune_data]
+
+    print(f"Tune with {args.tune_data}")
+
+    if args.teacher_bias_tune:
+        teacher_tune.tune_teacher(tune_data_loader, teacher)
+    if args.teacher_bias_last_layer_tune:
+        teacher_tune.tune_teacher_last_layer(tune_data_loader, teacher)
+
+    teacher_tune.check(tune_data_loader, teacher, output_func=print)
 
 
 def initialize_stats_ops_common(teacher, student, active_nodes, args):
@@ -433,9 +449,12 @@ def initialize_student(student, teacher, args):
 def main(args):
     checkpoint.init_checkpoint()
 
+    sys.stdout = logger.Logger("./log.log", mode="w") 
+    sys.stderr = logger.Logger("./log.err", mode="w") 
+
     cmd_line = " ".join(sys.argv)
-    log.info(f"{cmd_line}")
-    log.info(f"Working dir: {os.getcwd()}")
+    print(f"{cmd_line}")
+    print(f"Working dir: {os.getcwd()}")
     utils.set_all_seeds(args.seed)
 
     ks = parse_ks(args.ks)
@@ -457,11 +476,11 @@ def main(args):
         d, d_output, train_dataset, eval_dataset = init_dataset(args)
 
     if args.save_dataset:
-        log.info("Saving training dataset")
+        print("Saving training dataset")
         torch.save(train_dataset, "train_dataset.pth")
-        log.info("Saving eval dataset")
+        print("Saving eval dataset")
         torch.save(eval_dataset, "eval_dataset.pth")
-        log.info("Saving dataset params")
+        print("Saving dataset params")
         torch.save(dict(d=d, d_output=d_output), "params_dataset.pth")
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batchsize, shuffle=True, num_workers=4)
@@ -473,24 +492,24 @@ def main(args):
             raise RuntimeError(f"random_dataset_size [{args.random_dataset_size}] cannot devide total_bp_iters [{args.total_bp_iters}]")
 
         args.num_epoch = int(args.num_epoch)
-        log.info(f"#Epoch is now set to {args.num_epoch}")
+        print(f"#Epoch is now set to {args.num_epoch}")
 
-    log.info(args.pretty())
-    log.info(f"ks: {ks}")
-    log.info(f"lr: {lrs}")
+    print(args.pretty())
+    print(f"ks: {ks}")
+    print(f"lr: {lrs}")
 
     if args.d_output > 0:
         d_output = args.d_output 
 
-    log.info(f"d_output: {d_output}") 
+    print(f"d_output: {d_output}") 
     loss_func = initialize_loss_func(args)
 
     if args.save_train_dataset:
-        log.info("Save training dataset")
+        print("Save training dataset")
         torch.save(train_loader, "train_dataset.pth")
 
     if args.save_eval_dataset:
-        log.info("Save eval dataset")
+        print("Save eval dataset")
         torch.save(eval_loader, "eval_dataset.pth")
 
     if checkpoint.exist_checkpoint():
@@ -498,15 +517,17 @@ def main(args):
     elif args.resume_from_checkpoint is not None:
         cp = checkpoint.load_checkpoint(filename=args.resume_from_checkpoint)
     else:
-        teacher, student, active_nodes = initialize_networks(d, ks, d_output, eval_loader, args)
+        teacher, student, active_nodes = initialize_networks(d, ks, d_output, args)
+        tune_teacher_model(teacher, train_loader, eval_loader, args)
+
         if args.eval_teacher_prune_ratio > 0:
-            log.info(f"Prune teacher weight during evaluation. Ratio: {args.eval_teacher_prune_ratio}")
+            print(f"Prune teacher weight during evaluation. Ratio: {args.eval_teacher_prune_ratio}")
             noise_teacher = deepcopy(teacher)
             noise_teacher.prune_weight_bias(args.eval_teacher_prune_ratio)
         else:
             noise_teacher = teacher
             
-        log.info("=== Start ===")
+        print("=== Start ===")
         train_stats_op = initialize_train_stats_ops(teacher, student, active_nodes, args)
         train_stats_op.label = "train"
 
@@ -542,7 +563,7 @@ def main(args):
     # pickle.dump(model2numpy(teacher), open("weights_gt.pickle", "wb"), protocol=2)
 
     while cp.trial_idx < args.num_trial:
-        log.info(f"=== Trial {cp.trial_idx}, std = {args.data_std}, dataset = {args.dataset} ===")
+        print(f"=== Trial {cp.trial_idx}, std = {args.data_std}, dataset = {args.dataset} ===")
 
         # init_corrs[-1] = predict_last_order(student, teacher, args)
         # alter_last_layer = predict_last_order(student, teacher, args)
@@ -556,11 +577,11 @@ def main(args):
 
     torch.save(cp.all_stats, "stats.pickle")
 
-    # log.info("Student network")
-    # log.info(student.w1.weight)
-    # log.info("Teacher network")
-    # log.info(teacher.w1.weight)
-    log.info(f"Working dir: {os.getcwd()}")
+    # print("Student network")
+    # print(student.w1.weight)
+    # print("Teacher network")
+    # print(teacher.w1.weight)
+    print(f"Working dir: {os.getcwd()}")
 
 if __name__ == "__main__":
     main()
