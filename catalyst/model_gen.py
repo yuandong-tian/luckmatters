@@ -302,11 +302,13 @@ class ModelConv(nn.Module):
 
     def forward(self, x):
         hs = []
+        post_lins = []
         #bns = []
         h = x
         for i in range(len(self.ws_linear)):
             w = self.ws_linear[i]
             h = w(h)
+            post_lins.append(h)
             if self.bn_before_relu:
                 if len(self.ws_bn) > 0:
                     bn = self.ws_bn[i]
@@ -321,7 +323,7 @@ class ModelConv(nn.Module):
             #bns.append(h)
         h = hs[-1].view(h.size(0), -1)
         y = self.final_w(h)
-        return dict(hs=hs, y=y)
+        return dict(hs=hs, post_lins=post_lins, y=y)
 
     def init_w(self, use_sep=True, weight_choices=None):
         for w in self.ws_linear:

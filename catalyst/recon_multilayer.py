@@ -11,6 +11,8 @@ import hydra
 import os
 import sys
 
+from jacobian import JacobianReg
+
 import teacher_tune
 
 from argparse import Namespace
@@ -55,6 +57,39 @@ def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, pe
 
     train_stats_op.reset()
 
+    if args.jacobian_reg_coeff is not None:
+        reg = JacobianReg()
+
+    def train_op(x):
+        if args.jacobian_reg_coeff is not None:
+            x.requires_grad = True
+
+        optimizer.zero_grad()
+
+        output_t = teacher(x)
+        output_s = student(x)
+
+        y_t = output_t["y"].detach()
+        y_s = output_s["y"]
+
+        if args.teacher_output_noise is not None:
+            y_t = y_t + torch.randn_like(y_t) * args.teacher_output_noise
+
+        err = loss_func(y_s, y_t)
+        if torch.isnan(err).item():
+            print("NAN appears, optimization aborted")
+            return False
+
+        if args.jacobian_reg_coeff is not None:
+            R = reg(x, y_s)
+            err = err + args.jacobian_reg_coeff * R
+
+        err.backward()
+        train_stats_op.add(output_t, output_s, y)
+        optimizer.step()
+        return True
+
+
     for x, y in train_loader:
         if not args.use_cnn:
             x = x.view(x.size(0), -1)
@@ -69,29 +104,12 @@ def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, pe
             x2 = perturber.perturb(forwarder_student, forwarder_teacher, x, loss_func) 
             student.train()
 
-            output_t = teacher(x2)
-            output_s = student(x2)
-
-            err = loss_func(output_s["y"], output_t["y"].detach())
-            if torch.isnan(err).item():
-                print("NAN appears, optimization aborted")
+            if not train_op(x2):
                 return dict(exit="nan")
-            err.backward()
-            train_stats_op.add(output_t, output_s, y)
-            optimizer.step()
 
         if perturber is None or args.adv_and_original:
-            optimizer.zero_grad()
-            output_t = teacher(x)
-            output_s = student(x)
-
-            err = loss_func(output_s["y"], output_t["y"].detach())
-            if torch.isnan(err).item():
-                print("NAN appears, optimization aborted")
+            if not train_op(x):
                 return dict(exit="nan")
-            err.backward()
-            train_stats_op.add(output_t, output_s, y)
-            optimizer.step()
 
         if args.normalize:
             student.normalize()
@@ -518,7 +536,9 @@ def main(args):
         cp = checkpoint.load_checkpoint(filename=args.resume_from_checkpoint)
     else:
         teacher, student, active_nodes = initialize_networks(d, ks, d_output, args)
-        tune_teacher_model(teacher, train_loader, eval_loader, args)
+
+        if args.load_teacher is None:
+            tune_teacher_model(teacher, train_loader, eval_loader, args)
 
         if args.eval_teacher_prune_ratio > 0:
             print(f"Prune teacher weight during evaluation. Ratio: {args.eval_teacher_prune_ratio}")

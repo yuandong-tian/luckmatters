@@ -54,6 +54,7 @@ stats_teacher_h: false
 stats_student_h: false
 teacher_bias_tune: true
 teacher_bias_last_layer_tune: true
+teacher_output_noise: 0.01
 tune_data: "eval"
 teacher_strength_decay: 0
 student_scale_down: 0.1
@@ -61,6 +62,8 @@ data_dir: /checkpoint/yuandong
 num_epoch_save_summary: 10
 save_student: true
 num_epoch_save_student: 10
+
+jacobian_reg_coeff: null
 
 adv_and_original: false
 

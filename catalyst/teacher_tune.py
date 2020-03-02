@@ -6,7 +6,13 @@ def tune_teacher(data_loader, teacher):
     num_hidden = teacher.num_hidden_layers()
     for t in range(num_hidden):
         output = basic_tools.utils.concatOutput(data_loader, [teacher])
-        estimated_bias = output[0]["post_lins"][t].median(dim=0)[0]
+
+        act = output[0]["post_lins"][t]
+
+        if act.dim() == 4:
+            act = act.permute(0, 2, 3, 1).reshape(-1, act.size(1))
+
+        estimated_bias = act.median(dim=0)[0]
         teacher.ws_linear[t].bias.data[:] -= estimated_bias.cuda() 
 
 
