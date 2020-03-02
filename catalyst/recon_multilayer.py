@@ -18,9 +18,9 @@ from argparse import Namespace
 import logging
 log = logging.getLogger(__file__)
 
-from utils_ import *
-import stats
-import checkpoint
+import basic_tools.checkpoint as checkpoint
+import basic_tools.stats_op as stats
+import basic_tools.utils as utils
 
 from model_gen import Model, ModelConv, prune
 from copy import deepcopy
@@ -213,7 +213,7 @@ def optimize(train_loader, eval_loader, cp, loss_func, args, lrs):
         eval_train_stats = eval_model(cp.epoch, train_loader, cp.teacher, cp.student, cp.eval_train_stats_op)
         this_stats.update(eval_train_stats)
 
-        log.info(f"[{cp.epoch}]: Bytesize of stats: {count_size(this_stats) / 2 ** 20} MB")
+        log.info(f"[{cp.epoch}]: Bytesize of stats: {utils.count_size(this_stats) / 2 ** 20} MB")
 
         cp.stats.append(this_stats)
 
@@ -433,7 +433,7 @@ def main(args):
     cmd_line = " ".join(sys.argv)
     log.info(f"{cmd_line}")
     log.info(f"Working dir: {os.getcwd()}")
-    set_all_seeds(args.seed)
+    utils.set_all_seeds(args.seed)
 
     ks = parse_ks(args.ks)
     lrs = parse_lr(args.lr)

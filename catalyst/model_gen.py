@@ -4,8 +4,7 @@ import os
 import torch
 import torch.nn as nn
 import random
-from utils_ import haar_measure, init_separate_w
-
+import basic_tools.theory as theory
 
 # Generate random orth matrix.
 import numpy as np
@@ -23,7 +22,7 @@ def get_aug_w(w):
 
 def set_orth(layer):
     w = layer.weight
-    orth = haar_measure(w.size(1))
+    orth = theory.haar_measure(w.size(1))
     w.data = torch.from_numpy(orth[:w.size(0), :w.size(1)].astype('f4')).cuda()
 
 def set_add_noise(layer, teacher_layer, perturb):
@@ -60,7 +59,7 @@ def init_w(layer, use_sep=True, weight_choices=[-0.5, -0.25, 0, 0.25, 0.5]):
         input_d *= s
 
     if use_sep:
-        layer.weight.data[:] = torch.from_numpy(init_separate_w(output_d, input_d, weight_choices)).view(*sz).cuda()
+        layer.weight.data[:] = torch.from_numpy(theory.init_separate_w(output_d, input_d, weight_choices)).view(*sz).cuda()
         if layer.bias is not None:
             layer.bias.data.uniform_(-.5, 0.5)
 

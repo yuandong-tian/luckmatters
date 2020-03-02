@@ -8,8 +8,6 @@ import operator
 
 import numpy as np
 
-import utils_ as utils
-
 class RandomDataset(Dataset):
     def __init__(self, N, d, std, noise_type="gaussian", projection_dim=None, projection_more_noise_ratio=0.1):
         super(RandomDataset, self).__init__()
