@@ -2,7 +2,7 @@ data_perturb:
   class: attack.FastGradientSignUntargeted
   params:
     epsilon: 0.3 
-    alpha:  2
+    alpha:  0.01
     min_val: null
     max_val: null
     max_iters: 5 
