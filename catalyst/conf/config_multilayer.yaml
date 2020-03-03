@@ -54,7 +54,7 @@ stats_teacher_h: false
 stats_student_h: false
 teacher_bias_tune: true
 teacher_bias_last_layer_tune: true
-teacher_output_noise: 0.01
+teacher_output_noise: null
 tune_data: "eval"
 teacher_strength_decay: 0
 student_scale_down: 0.1
