@@ -94,6 +94,7 @@ def train_model(i, train_loader, teacher, student, train_stats_op, loss_func, pe
         if not args.use_cnn:
             x = x.view(x.size(0), -1)
         x = x.cuda()
+        y = y.cuda()
 
         # adversarial training, if there is anything defined. 
         if perturber is not None:
@@ -133,6 +134,7 @@ def eval_model(i, eval_loader, teacher, student, eval_stats_op):
             if not teacher.use_cnn:
                 x = x.view(x.size(0), -1)
             x = x.cuda()
+            y = y.cuda()
             output_t = teacher(x)
             output_s = student(x)
 
@@ -158,6 +160,7 @@ def suppress_unaligned(eval_loader, teacher, student, eval_stats_op):
             if not teacher.use_cnn:
                 x = x.view(x.size(0), -1)
             x = x.cuda()
+            y = y.cuda()
             output_t = teacher(x)
             output_s = student(x)
 
@@ -415,6 +418,9 @@ def initialize_stats_ops_common(teacher, student, active_nodes, args):
         stats_op.add_stat(stats.StatsCELoss)
     else:
         stats_op.add_stat(stats.StatsL2Loss)
+
+    if args.dataset in ["cifar10", "mnist"]:
+        stats_op.add_stat(stats.StatsAcc)
 
     return stats_op
 
