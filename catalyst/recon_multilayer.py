@@ -302,48 +302,20 @@ def parse_lr(lr_str):
     return lrs
 
 def initialize_networks(d, ks, d_output, args):
-    if not args.use_cnn:
-        teacher = Model(d[0], ks, d_output, 
-                has_bias=not args.no_bias, has_bn=args.teacher_bn, bn_before_relu=args.bn_before_relu, leaky_relu=args.leaky_relu).cuda()
-
-    else:
-        teacher = ModelConv(d, ks, d_output, has_bn=args.teacher_bn, bn_before_relu=args.bn_before_relu, leaky_relu=args.leaky_relu).cuda()
-
     if args.load_teacher is not None:
         print("Loading teacher from: " + args.load_teacher)
-        checkpoint = torch.load(args.load_teacher)
-        active_nodes = None
-        active_ks = ks
-
-        if isinstance(checkpoint, dict):
-            teacher.load_state_dict(checkpoint['net'])
-
-            if "inactive_nodes" in checkpoint: 
-                inactive_nodes = checkpoint["inactive_nodes"]
-                masks = checkpoint["masks"]
-                ratios = checkpoint["ratios"]
-                inactive_nodes2, masks2 = prune(teacher, ratios)
-
-                for m, m2 in zip(masks, masks2):
-                    if (m - m2).norm() > 1e-3:
-                        print(m)
-                        print(m2)
-                        raise RuntimeError("New mask is not the same as old mask")
-
-                for inactive, inactive2 in zip(inactive_nodes, inactive_nodes2):
-                    if set(inactive) != set(inactive2):
-                        raise RuntimeError("New inactive set is not the same as old inactive set")
-
-                # Make sure the last layer is normalized. 
-                # teacher.normalize_last()
-                # teacher.final_w.weight.data /= 3
-                # teacher.final_w.bias.data /= 3
-                active_nodes = [ [ kk for kk in range(k) if kk not in a ] for a, k in zip(inactive_nodes, ks) ]
-                active_ks = [ len(a) for a in active_nodes ]
-        else:
-            teacher = checkpoint
-        
+        teacher = torch.load(args.load_teacher).cuda()
+        # Ks is not valid here. print out the ks for the loaded teacher.
+        ks = [ w.weight.size(0) for w in teacher.ws_linear ] 
+        print(f"Loaded ks: {str(ks)}")
     else:
+        if not args.use_cnn:
+            teacher = Model(d[0], ks, d_output, 
+                    has_bias=not args.no_bias, has_bn=args.teacher_bn, bn_before_relu=args.bn_before_relu, leaky_relu=args.leaky_relu).cuda()
+
+        else:
+            teacher = ModelConv(d, ks, d_output, has_bn=args.teacher_bn, bn_before_relu=args.bn_before_relu, leaky_relu=args.leaky_relu).cuda()
+
         print("Init teacher..")
         teacher.init_w(use_sep = not args.no_sep, weight_choices=list(args.weight_choices))
         if args.teacher_strength_decay > 0: 
@@ -358,18 +330,14 @@ def initialize_networks(d, ks, d_output, args):
 
         teacher.normalize()
         print("Teacher weights initiailzed randomly...")
-        active_nodes = None
-        active_ks = ks
-
-    print(f"Active ks: {active_ks}")
 
     if args.load_student is None:
         if not args.use_cnn:
-            student = Model(d[0], active_ks, d_output, 
+            student = Model(d[0], ks, d_output, 
                             multi=args.node_multi, 
                             has_bias=not args.no_bias, has_bn=args.bn, bn_before_relu=args.bn_before_relu, dropout=args.dropout).cuda()
         else:
-            student = ModelConv(d, active_ks, d_output, multi=args.node_multi, has_bn=args.bn, bn_before_relu=args.bn_before_relu).cuda()
+            student = ModelConv(d, ks, d_output, multi=args.node_multi, has_bn=args.bn, bn_before_relu=args.bn_before_relu).cuda()
 
         # student can start with smaller norm. 
         student.scale(args.student_scale_down)
@@ -386,7 +354,7 @@ def initialize_networks(d, ks, d_output, args):
         teacher.w0.weight.data[i, span*i:span*i+span] = 1
     '''
 
-    return teacher, student, active_nodes
+    return teacher, student
 
 
 def tune_teacher_model(teacher, train_loader, eval_loader, args):
@@ -541,7 +509,7 @@ def main(args):
     elif args.resume_from_checkpoint is not None:
         cp = checkpoint.load_checkpoint(filename=args.resume_from_checkpoint)
     else:
-        teacher, student, active_nodes = initialize_networks(d, ks, d_output, args)
+        teacher, student = initialize_networks(d, ks, d_output, args)
 
         if args.load_teacher is None:
             tune_teacher_model(teacher, train_loader, eval_loader, args)
@@ -552,6 +520,8 @@ def main(args):
             noise_teacher.prune_weight_bias(args.eval_teacher_prune_ratio)
         else:
             noise_teacher = teacher
+
+        active_nodes = None
             
         print("=== Start ===")
         train_stats_op = initialize_train_stats_ops(teacher, student, active_nodes, args)
