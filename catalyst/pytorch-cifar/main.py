@@ -10,6 +10,12 @@ import torch.backends.cudnn as cudnn
 import torchvision
 import torchvision.transforms as transforms
 
+import sys
+import os
+
+sys.path.join("../")
+import attack
+
 import os
 import argparse
 
@@ -27,6 +33,18 @@ parser.add_argument('--use_cnn', action="store_true")
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--load', type=str, default=None)
 parser.add_argument('--prune_when_resume', action='store_true', help="compute prune matrix when resume")
+
+# parameters for generating adversarial examples
+parser.add_argument('--adv_training', action="store_true")
+parser.add_argument('--epsilon', '-e', type=float, default=0.3, 
+    help='maximum perturbation of adversaries')
+parser.add_argument('--alpha', '-a', type=float, default=0.01, 
+    help='movement multiplier per iteration when generating adversarial examples')
+parser.add_argument('--k', '-k', type=int, default=40, 
+    help='maximum iteration when generating adversarial examples')
+parser.add_argument('--perturbation_type', '-p', choices=['linf', 'l2'], default='linf', 
+    help='the type of the perturbation (linf or l2)')
+
 args = parser.parse_args()
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -48,7 +66,7 @@ transform_test = transforms.Compose([
 ])
 
 cifar10_dataset = "/checkpoint/yuandong"
-save_dir = "/checkpoint/pytorch-cifar/checkpoint"
+save_dir = "/checkpoint/yuandong/pytorch-cifar/checkpoint"
 
 trainset = torchvision.datasets.CIFAR10(root=cifar10_dataset, train=True, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True, num_workers=2)
@@ -129,12 +147,23 @@ def train(epoch, masks, args):
     train_loss = 0
     correct = 0
     total = 0
+
+    attacker = FastGradientSignUntargeted(args.epsilon, 
+                                        args.alpha, 
+                                        min_val=None, 
+                                        max_val=None, 
+                                        max_iters=args.k, 
+                                        _type=args.perturbation_type)
+
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         apply_masks(net, masks)
         inputs, targets = inputs.to(device), targets.to(device)
 
         if not args.use_cnn:
             inputs = inputs.view(inputs.size(0), -1)
+
+        if args.adv_training:
+            inputs = attacker.perturb_ce(net, data, label, 'mean', True)
 
         optimizer.zero_grad()
         outputs = net(inputs)["y"]

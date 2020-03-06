@@ -65,8 +65,9 @@ class FastGradientSignUntargeted():
         self.max_iters = max_iters
         # The perturbation of epsilon
         self._type = _type
-        
-    def perturb(self, student, teacher, original_images, loss_func, random_start=False):
+
+
+    def get_input(original_images, random_start=False):
         # original_images: values are within self.min_val and self.max_val
 
         # The adversaries created from random close points to the original data
@@ -80,6 +81,12 @@ class FastGradientSignUntargeted():
             x = original_images.clone()
 
         x.requires_grad = True 
+        return x
+
+
+    # For student teacher setting. 
+    def perturb(self, student, teacher, original_images, loss_func, random_start=False):
+        x = get_input(original_images, random_start=random_start)
 
         with torch.enable_grad():
             for _iter in range(self.max_iters):
@@ -97,6 +104,40 @@ class FastGradientSignUntargeted():
                 # the adversaries' pixel value should within max_x and min_x due 
                 # to the l_infinity / l2 restriction
                 # x = project(x, original_images, self.epsilon, self._type)
+
+                # the adversaries' value should be valid pixel value
+                if self.min_val is not None or self.max_val is not None:
+                    x.clamp_(self.min_val, self.max_val)
+
+        return x
+
+
+    # for normal training. 
+    def perturb_ce(self, model, original_images, labels, reduction4loss='mean', random_start=False):
+        x = get_input(original_images, random_start=random_start)
+
+        # max_x = original_images + self.epsilon
+        # min_x = original_images - self.epsilon
+
+        with torch.enable_grad():
+            for _iter in range(self.max_iters):
+                outputs = self.model(x)
+
+                loss = F.cross_entropy(outputs, labels, reduction=reduction4loss)
+
+                if reduction4loss == 'none':
+                    grad_outputs = tensor2cuda(torch.ones(loss.shape))
+                else:
+                    grad_outputs = None
+
+                grads = torch.autograd.grad(loss, x, grad_outputs=grad_outputs, 
+                        only_inputs=True)[0]
+
+                x.data += self.alpha * torch.sign(grads.data) 
+
+                # the adversaries' pixel value should within max_x and min_x due 
+                # to the l_infinity / l2 restriction
+                x = project(x, original_images, self.epsilon, self._type)
 
                 # the adversaries' value should be valid pixel value
                 if self.min_val is not None or self.max_val is not None:
