@@ -363,6 +363,7 @@ class ModelConv(nn.Module):
         assert j < len(self.ws_bn)
         return self.ws_bn[j]
 
+
 def prune(net, ratios):
     # Prune the network and finetune. 
     n = net.num_layers()
@@ -382,8 +383,8 @@ def prune(net, ratios):
             else:
                 # The final FC layer. 
                 input_dim = net.from_bottom_linear(i - 1).size(0)
-                W_reshaped = W.view(W.size(0), -1, input_dim)
-                w_norms = W_reshaped.view(-1, input_dim).abs().mean(0)
+                W_reshaped = W.view(W.size(0), input_dim, -1).permute(0, 2, 1)
+                w_norms = W_reshaped.reshape(-1, input_dim).abs().mean(0)
                 fc_to_conv = True
         else:
             # W: [output_dim, input_dim]
@@ -395,8 +396,8 @@ def prune(net, ratios):
 
         m = W.clone().fill_(1.0)
         if fc_to_conv:
-            m = m.view(m.size(0), -1, input_dim) 
-            m[:, :, inactive_mask] = 0
+            m = m.view(m.size(0), input_dim, -1) 
+            m[:, inactive_mask, :] = 0
             m = m.view(W.size(0), W.size(1))
         else:
             m[:, inactive_mask] = 0
@@ -406,3 +407,4 @@ def prune(net, ratios):
         masks.append(m)
         
     return inactive_nodes, masks
+
