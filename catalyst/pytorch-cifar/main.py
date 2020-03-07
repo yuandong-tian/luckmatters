@@ -12,13 +12,6 @@ import torchvision.transforms as transforms
 
 import sys
 import os
-
-abs_path = os.path.abspath(os.path.dirname(__file__))
-sys.path.append(os.path.join(abs_path, "../"))
-
-import attack
-
-import os
 import argparse
 
 from models import *
@@ -26,6 +19,11 @@ from utils import progress_bar
 
 import hydra
 import basic_tools
+
+abs_path = os.path.abspath(os.path.dirname(__file__))
+sys.path.append(os.path.join(abs_path, "../"))
+
+import attack
 
 def apply_masks(net, m):
     masks = m["masks"]
