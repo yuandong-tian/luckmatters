@@ -174,9 +174,9 @@ def main(args):
 
     m = dict(net=net.state_dict(), best_acc=0, epoch=0, masks=[], inactive_nodes=None, ratios=ratios)
 
-    if args.device == 'cuda':
+    # if args.device == 'cuda':
         # net = torch.nn.DataParallel(net)
-        cudnn.benchmark = True
+        # cudnn.benchmark = True
 
     if args.load is not None:
         # Load checkpoint.
