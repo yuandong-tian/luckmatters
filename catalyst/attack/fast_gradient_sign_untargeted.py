@@ -67,7 +67,7 @@ class FastGradientSignUntargeted():
         self._type = _type
 
 
-    def get_input(original_images, random_start=False):
+    def get_input(self, original_images, random_start=False):
         # original_images: values are within self.min_val and self.max_val
 
         # The adversaries created from random close points to the original data
@@ -76,7 +76,8 @@ class FastGradientSignUntargeted():
                 -self.epsilon, self.epsilon)
             rand_perturb = tensor2cuda(rand_perturb)
             x = original_images + rand_perturb
-            x.clamp_(self.min_val, self.max_val)
+            if self.min_val is not None or self.max_val is not None:
+                x.clamp_(self.min_val, self.max_val)
         else:
             x = original_images.clone()
 
@@ -86,7 +87,7 @@ class FastGradientSignUntargeted():
 
     # For student teacher setting. 
     def perturb(self, student, teacher, original_images, loss_func, random_start=False):
-        x = get_input(original_images, random_start=random_start)
+        x = self.get_input(original_images, random_start)
 
         with torch.enable_grad():
             for _iter in range(self.max_iters):
@@ -114,14 +115,14 @@ class FastGradientSignUntargeted():
 
     # for normal training. 
     def perturb_ce(self, model, original_images, labels, reduction4loss='mean', random_start=False):
-        x = get_input(original_images, random_start=random_start)
+        x = self.get_input(original_images, random_start)
 
         # max_x = original_images + self.epsilon
         # min_x = original_images - self.epsilon
 
         with torch.enable_grad():
             for _iter in range(self.max_iters):
-                outputs = self.model(x)
+                outputs = model(x)
 
                 loss = F.cross_entropy(outputs, labels, reduction=reduction4loss)
 

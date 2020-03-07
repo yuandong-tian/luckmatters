@@ -13,7 +13,7 @@ import torchvision.transforms as transforms
 import sys
 import os
 
-sys.path.join("../")
+sys.path.append("../")
 import attack
 
 import os
@@ -31,6 +31,7 @@ def apply_masks(net, masks):
 parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
 parser.add_argument('--use_cnn', action="store_true")
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
+parser.add_argument('--method', default="adam", type=str)
 parser.add_argument('--load', type=str, default=None)
 parser.add_argument('--prune_when_resume', action='store_true', help="compute prune matrix when resume")
 
@@ -84,9 +85,11 @@ print('==> Building model..')
 
 if args.use_cnn:
     ks = [64, 64, 64, 64]
+    print(f"Use CNN, ks = {ks}")
     net = ModelConv((3, 32, 32), ks, 10, multi=1)
 else:
     ks = [50, 75, 100, 125]
+    print(f"Do not use CNN, ks = {ks}")
     net = Model(3 * 32 * 32, ks, 10, has_bias=True, multi=1)
 
 ratios=[0.3, 0.5, 0.5, 0.7]
@@ -138,7 +141,12 @@ if args.load is not None:
         best_acc = 0
 
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+if args.method == "sgd":
+    optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+elif args.method == "adam":
+    optimizer = optim.Adam(net.parameters(), lr=args.lr)
+else:
+    raise NotImplementedError
 
 # Training
 def train(epoch, masks, args):
@@ -148,12 +156,10 @@ def train(epoch, masks, args):
     correct = 0
     total = 0
 
-    attacker = FastGradientSignUntargeted(args.epsilon, 
-                                        args.alpha, 
-                                        min_val=None, 
-                                        max_val=None, 
-                                        max_iters=args.k, 
-                                        _type=args.perturbation_type)
+    attacker = attack.FastGradientSignUntargeted(
+            args.epsilon, args.alpha, 
+            min_val=None, max_val=None, 
+            max_iters=args.k, _type=args.perturbation_type)
 
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         apply_masks(net, masks)
@@ -163,7 +169,8 @@ def train(epoch, masks, args):
             inputs = inputs.view(inputs.size(0), -1)
 
         if args.adv_training:
-            inputs = attacker.perturb_ce(net, data, label, 'mean', True)
+            net_func = lambda x: net(x)["y"]
+            inputs = attacker.perturb_ce(net_func, inputs, targets, 'mean', True)
 
         optimizer.zero_grad()
         outputs = net(inputs)["y"]
