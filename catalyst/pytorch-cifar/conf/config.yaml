@@ -1,0 +1,30 @@
+use_cnn: false
+lr: 0.1
+method: adam
+load: 
+prune_when_resume: false
+
+device: cuda
+
+adv_training: false
+
+# maximum perturbation of adversaries
+epsilon: 0.3
+
+# movement multiplier per iteration when generating adversarial examples
+alpha: 0.01
+
+#
+# maximum iteration when generating adversarial examples
+k: 40
+
+# the type of the perturbation (linf or l2)
+perturbation_type: linf
+
+dataset: "/checkpoint/yuandong"
+save_dir: "./checkpoint"
+
+# These two are for sweep recording purpose
+githash: ""
+sweep_filename: ""
+

@@ -22,148 +22,34 @@ import argparse
 from models import *
 from utils import progress_bar
 
-def apply_masks(net, masks):
+import hydra
+import basic_tools.logger as logger
+
+def apply_masks(net, m):
+    masks = m["masks"]
     if len(masks) > 0:
         for i in range(1, net.num_layers()):
             W = net.from_bottom_linear(i)
             W *= masks[i - 1]
 
-parser = argparse.ArgumentParser(description='PyTorch CIFAR10 Training')
-parser.add_argument('--use_cnn', action="store_true")
-parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
-parser.add_argument('--method', default="adam", type=str)
-parser.add_argument('--load', type=str, default=None)
-parser.add_argument('--prune_when_resume', action='store_true', help="compute prune matrix when resume")
-
-# parameters for generating adversarial examples
-parser.add_argument('--adv_training', action="store_true")
-parser.add_argument('--epsilon', '-e', type=float, default=0.3, 
-    help='maximum perturbation of adversaries')
-parser.add_argument('--alpha', '-a', type=float, default=0.01, 
-    help='movement multiplier per iteration when generating adversarial examples')
-parser.add_argument('--k', '-k', type=int, default=40, 
-    help='maximum iteration when generating adversarial examples')
-parser.add_argument('--perturbation_type', '-p', choices=['linf', 'l2'], default='linf', 
-    help='the type of the perturbation (linf or l2)')
-
-args = parser.parse_args()
-
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-best_acc = 0  # best test accuracy
-start_epoch = 0  # start from epoch 0 or last checkpoint epoch
-
-# Data
-print('==> Preparing data..')
-transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
-
-transform_test = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
-
-cifar10_dataset = "/checkpoint/yuandong"
-save_dir = "/checkpoint/yuandong/pytorch-cifar/checkpoint"
-
-trainset = torchvision.datasets.CIFAR10(root=cifar10_dataset, train=True, download=True, transform=transform_train)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True, num_workers=2)
-
-testset = torchvision.datasets.CIFAR10(root=cifar10_dataset, train=False, download=True, transform=transform_test)
-testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
-
-classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-
-# Model
-print('==> Building model..')
-# net = VGG('VGG19')
-# net = ResNet18()
-# ks = [10, 15, 20, 25]
-
-if args.use_cnn:
-    ks = [64, 64, 64, 64]
-    print(f"Use CNN, ks = {ks}")
-    net = ModelConv((3, 32, 32), ks, 10, multi=1)
-else:
-    ks = [50, 75, 100, 125]
-    print(f"Do not use CNN, ks = {ks}")
-    net = Model(3 * 32 * 32, ks, 10, has_bias=True, multi=1)
-
-ratios=[0.3, 0.5, 0.5, 0.7]
-# ratios=[0.3, 0.3, 0.3, 0.3]
-
-# net = PreActResNet18()
-# net = GoogLeNet()
-# net = DenseNet121()
-# net = ResNeXt29_2x64d()
-# net = MobileNet()
-# net = MobileNetV2()
-# net = DPN92()
-# net = ShuffleNetG2()
-# net = SENet18()
-# net = ShuffleNetV2(1)
-net = net.to(device)
-masks = []
-inactive_nodes = None
-if device == 'cuda':
-    # net = torch.nn.DataParallel(net)
-    cudnn.benchmark = True
-
-if args.load is not None:
-    # Load checkpoint.
-    print('==> Resuming from checkpoint..')
-    assert os.path.isdir(save_dir), 'Error: no checkpoint directory found!'
-    checkpoint = torch.load(args.load)
-
-    if isinstance(checkpoint, dict):
-        net.load_state_dict(checkpoint['net'])
-        best_acc = checkpoint['acc']
-        start_epoch = checkpoint['epoch']
-        inactive_nodes = checkpoint.get("inactive_nodes", inactive_nodes)
-        masks = checkpoint.get("masks", masks)
-    else:
-        net = checkpoint
-        net = net.to(device)
-        best_acc = 0
-        start_epoch = 0
-
-    if args.prune_when_resume:
-        print(f"prune ratio: {ratios}")
-        inactive_nodes, masks = prune(net, ratios)
-
-        for i, (inactive, k) in enumerate(zip(inactive_nodes, ks)):
-            print(f"layer{i} pruned: {len(inactive)}/{k}")
-
-        apply_masks(net, masks)
-        best_acc = 0
-
-criterion = nn.CrossEntropyLoss()
-if args.method == "sgd":
-    optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
-elif args.method == "adam":
-    optimizer = optim.Adam(net.parameters(), lr=args.lr)
-else:
-    raise NotImplementedError
 
 # Training
-def train(epoch, masks, args):
-    print('\nEpoch: %d' % epoch)
+def train(net, m, loader, optimizer, args):
     net.train()
     train_loss = 0
     correct = 0
     total = 0
+
+    criterion = nn.CrossEntropyLoss()
 
     attacker = attack.FastGradientSignUntargeted(
             args.epsilon, args.alpha, 
             min_val=None, max_val=None, 
             max_iters=args.k, _type=args.perturbation_type)
 
-    for batch_idx, (inputs, targets) in enumerate(trainloader):
-        apply_masks(net, masks)
-        inputs, targets = inputs.to(device), targets.to(device)
+    for batch_idx, (inputs, targets) in enumerate(loader):
+        apply_masks(net, m)
+        inputs, targets = inputs.to(args.device), targets.to(args.device)
 
         if not args.use_cnn:
             inputs = inputs.view(inputs.size(0), -1)
@@ -183,20 +69,22 @@ def train(epoch, masks, args):
         total += targets.size(0)
         correct += predicted.eq(targets).sum().item()
 
-        progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-            % (train_loss/(batch_idx+1), 100.*correct/total, correct, total))
+        progress_bar(batch_idx, len(loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+            % (train_loss/(batch_idx+1), 100.*correct/total, correct, total), stdout=sys.__stdout__)
 
-    apply_masks(net, masks)
+    apply_masks(net, m)
 
-def test(epoch, args):
-    global best_acc
+def test(net, m, loader, args):
     net.eval()
     test_loss = 0
     correct = 0
     total = 0
+
+    criterion = nn.CrossEntropyLoss()
+
     with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(testloader):
-            inputs, targets = inputs.to(device), targets.to(device)
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(args.device), targets.to(args.device)
 
             if not args.use_cnn:
                 inputs = inputs.view(inputs.size(0), -1)
@@ -209,32 +97,131 @@ def test(epoch, args):
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
 
-            progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
+            progress_bar(batch_idx, len(loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+                % (test_loss/(batch_idx+1), 100.*correct/total, correct, total), stdout=sys.__stdout__)
 
     # Save checkpoint.
     acc = 100.*correct/total
-    if acc > best_acc:
-        print(f'Saving with {acc} > {best_acc}')
-        state = {
-            'net': net.state_dict(),
-            'acc': acc,
-            'epoch': epoch,
-            "inactive_nodes": inactive_nodes,
-            "masks": masks,
-            "ratios": ratios,
-        }
-        if not os.path.isdir(save_dir):
-            os.mkdir(save_dir)
+    if acc > m["best_acc"]:
+        print(f'Saving with {acc} > {m["best_acc"]}')
 
-        filename = os.path.join(save_dir, 'ckpt.t7')
-        torch.save(state, filename)
+        m["best_acc"] = acc
+        m["net"] = net.state_dict()
+
+        if not os.path.isdir(args.save_dir):
+            os.mkdir(args.save_dir)
+
+        filename = os.path.join(args.save_dir, 'ckpt.t7')
+        torch.save(m, filename)
         print(f"save to {filename}")
-        best_acc = acc
 
-print("Initial test")
-test(-1, args)
 
-for epoch in range(start_epoch, start_epoch+200):
-    train(epoch, masks, args)
-    test(epoch, args)
+@hydra.main(config_path='conf/config.yaml', strict=True)
+def main(args):
+    sys.stdout = logger.Logger("./log.log", mode="w") 
+    sys.stderr = logger.Logger("./log.err", mode="w") 
+
+    print(os.getcwd())
+
+    # Data
+    print('==> Preparing data..')
+    transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
+    trainset = torchvision.datasets.CIFAR10(root=args.dataset, train=True, download=True, transform=transform_train)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=128, shuffle=True, num_workers=2)
+
+    testset = torchvision.datasets.CIFAR10(root=args.dataset, train=False, download=True, transform=transform_test)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
+
+    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+
+    # Model
+    print('==> Building model..')
+    # net = VGG('VGG19')
+    # net = ResNet18()
+    # ks = [10, 15, 20, 25]
+
+    if args.use_cnn:
+        ks = [64, 64, 64, 64]
+        print(f"Use CNN, ks = {ks}")
+        net = ModelConv((3, 32, 32), ks, 10, multi=1)
+    else:
+        ks = [50, 75, 100, 125]
+        print(f"Do not use CNN, ks = {ks}")
+        net = Model(3 * 32 * 32, ks, 10, has_bias=True, multi=1)
+
+    ratios=[0.3, 0.5, 0.5, 0.7]
+    # ratios=[0.3, 0.3, 0.3, 0.3]
+
+    # net = PreActResNet18()
+    # net = GoogLeNet()
+    # net = DenseNet121()
+    # net = ResNeXt29_2x64d()
+    # net = MobileNet()
+    # net = MobileNetV2()
+    # net = DPN92()
+    # net = ShuffleNetG2()
+    # net = SENet18()
+    # net = ShuffleNetV2(1)
+    net = net.to(args.device)
+
+    m = dict(net=net.state_dict(), best_acc=0, epoch=0, masks=[], inactive_nodes=None, ratios=ratios)
+
+    if args.device == 'cuda':
+        # net = torch.nn.DataParallel(net)
+        cudnn.benchmark = True
+
+    if args.load is not None:
+        # Load checkpoint.
+        print('==> Resuming from checkpoint..')
+        checkpoint = torch.load(args.load)
+
+        if "net" not in checkpoint:
+            net.load_state_dict(checkpoint)
+            m = dict(net=m, best_acc=0, epoch=0, masks=[], inactive_nodes=None, ratios=ratios)
+        else:
+            net.load_state_dict(checkpoint["net"])
+            m.update(checkpoint)
+
+        if args.prune_when_resume:
+            print(f"prune ratio: {ratios}")
+            inactive_nodes, masks = prune(m["net"], ratios)
+            for i, (inactive, k) in enumerate(zip(inactive_nodes, ks)):
+                print(f"layer{i} pruned: {len(inactive)}/{k}")
+
+            m["inactive_nodes"] = inactive_nodes
+            m["masks"] = masks
+
+            apply_masks(net, m)
+            m["best_acc"] = 0
+
+    if args.method == "sgd":
+        optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+    elif args.method == "adam":
+        optimizer = optim.Adam(net.parameters(), lr=args.lr)
+    else:
+        raise NotImplementedError
+
+    print("Initial test")
+    test(net, m, testloader, args)
+
+    start_epoch = m["epoch"]
+    while m["epoch"] < start_epoch + 200:
+        print(f'\nEpoch: {m["epoch"]}')
+        train(net, m, trainloader, optimizer, args)
+        test(net, m, testloader, args)
+        m["epoch"] += 1
+
+
+if __name__ == "__main__":
+    main()
