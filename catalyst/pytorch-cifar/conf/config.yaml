@@ -1,4 +1,5 @@
 use_cnn: false
+seed: 1
 lr: 0.1
 method: adam
 load: 

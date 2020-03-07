@@ -23,7 +23,6 @@ log = logging.getLogger(__file__)
 import basic_tools.checkpoint as checkpoint
 import basic_tools.stats_op as stats
 import basic_tools.utils as utils
-import basic_tools.logger as logger
 
 from model_gen import Model, ModelConv, prune
 from copy import deepcopy
@@ -439,15 +438,7 @@ def initialize_student(student, teacher, args):
 
 @hydra.main(config_path='conf/config_multilayer.yaml', strict=True)
 def main(args):
-    checkpoint.init_checkpoint()
-
-    sys.stdout = logger.Logger("./log.log", mode="w") 
-    sys.stderr = logger.Logger("./log.err", mode="w") 
-
-    cmd_line = " ".join(sys.argv)
-    print(f"{cmd_line}")
-    print(f"Working dir: {os.getcwd()}")
-    utils.set_all_seeds(args.seed)
+    basic_tools.start(args)
 
     ks = parse_ks(args.ks)
     lrs = parse_lr(args.lr)
@@ -486,7 +477,6 @@ def main(args):
         args.num_epoch = int(args.num_epoch)
         print(f"#Epoch is now set to {args.num_epoch}")
 
-    print(args.pretty())
     print(f"ks: {ks}")
     print(f"lr: {lrs}")
 

@@ -23,7 +23,7 @@ from models import *
 from utils import progress_bar
 
 import hydra
-import basic_tools.logger as logger
+import basic_tools
 
 def apply_masks(net, m):
     masks = m["masks"]
@@ -118,10 +118,7 @@ def test(net, m, loader, args):
 
 @hydra.main(config_path='conf/config.yaml', strict=True)
 def main(args):
-    sys.stdout = logger.Logger("./log.log", mode="w") 
-    sys.stderr = logger.Logger("./log.err", mode="w") 
-
-    print(os.getcwd())
+    basic_tools.start(args)
 
     # Data
     print('==> Preparing data..')
