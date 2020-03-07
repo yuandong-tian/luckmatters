@@ -17,7 +17,7 @@ import os
 import sys
 
 abs_path = os.path.abspath(os.path.dirname(__file__))
-sys.path.append(os.path.join(abs_path, "../"))
-sys.path.append(os.path.join(abs_path, "../symbol"))
+sys.path.append(os.path.join(abs_path, "../../"))
+sys.path.append(os.path.join(abs_path, "../../symbol"))
 
 from model_gen import Model, ModelConv, prune
