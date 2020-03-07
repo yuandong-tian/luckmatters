@@ -15,7 +15,9 @@ from .mobilenetv2 import *
 
 import os
 import sys
-sys.path.append("../")
-sys.path.append("../symbol")
+
+abs_path = os.path.abspath(os.path.dirname(__file__))
+sys.path.append(os.path.join(abs_path, "../"))
+sys.path.append(os.path.join(abs_path, "../symbol"))
 
 from model_gen import Model, ModelConv, prune

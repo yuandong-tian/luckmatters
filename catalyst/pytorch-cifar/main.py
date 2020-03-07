@@ -13,7 +13,9 @@ import torchvision.transforms as transforms
 import sys
 import os
 
-sys.path.append("../")
+abs_path = os.path.abspath(os.path.dirname(__file__))
+sys.path.append(os.path.join(abs_path, "../"))
+
 import attack
 
 import os
