@@ -15,7 +15,7 @@ import os
 import argparse
 
 from models import *
-from utils import progress_bar
+# from utils import progress_bar
 
 import hydra
 import basic_tools
@@ -69,8 +69,8 @@ def train(net, m, loader, optimizer, args):
         total += targets.size(0)
         correct += predicted.eq(targets).sum().item()
 
-        progress_bar(batch_idx, len(loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-            % (train_loss/(batch_idx+1), 100.*correct/total, correct, total), stdout=sys.__stdout__)
+        #progress_bar(batch_idx, len(loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+        #    % (train_loss/(batch_idx+1), 100.*correct/total, correct, total), stdout=sys.__stdout__)
 
     apply_masks(net, m)
 
@@ -97,8 +97,8 @@ def test(net, m, loader, args):
             total += targets.size(0)
             correct += predicted.eq(targets).sum().item()
 
-            progress_bar(batch_idx, len(loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
-                % (test_loss/(batch_idx+1), 100.*correct/total, correct, total), stdout=sys.__stdout__)
+            #progress_bar(batch_idx, len(loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
+            #    % (test_loss/(batch_idx+1), 100.*correct/total, correct, total), stdout=sys.__stdout__)
 
     # Save checkpoint.
     acc = 100.*correct/total
